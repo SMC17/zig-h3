@@ -1,0 +1,11 @@
+zig-cache/
+.zig-cache/
+zig-out/
+zig-pkg/
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
