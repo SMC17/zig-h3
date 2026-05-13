@@ -46,7 +46,7 @@ Add to your `build.zig.zon`:
 ```zig
 .dependencies = .{
     .h3 = .{
-        .url = "https://example.invalid/zig-h3-v0.1.0.tar.gz",
+        .url = "https://github.com/SMC17/zig-h3/archive/refs/tags/v0.1.0.tar.gz",
         .hash = "...",
     },
 },

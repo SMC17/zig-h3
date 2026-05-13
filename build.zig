@@ -80,4 +80,26 @@ pub fn build(b: *std.Build) void {
     const run_tests = b.addRunArtifact(tests);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_tests.step);
+
+    // Example: NYC neighbors walk.
+    const example_mod = b.createModule(.{
+        .root_source_file = b.path("examples/nyc_neighbors.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    example_mod.addConfigHeader(h3api_h);
+    example_mod.addIncludePath(h3c.path("src/h3lib/include"));
+    example_mod.linkLibrary(libh3);
+    example_mod.addImport("h3", mod);
+    const example_exe = b.addExecutable(.{
+        .name = "example-nyc-neighbors",
+        .root_module = example_mod,
+        .use_llvm = true,
+        .use_lld = true,
+    });
+    b.installArtifact(example_exe);
+    const run_example = b.addRunArtifact(example_exe);
+    const example_step = b.step("example-nyc-neighbors", "Run the NYC k=1 neighbors example");
+    example_step.dependOn(&run_example.step);
 }
