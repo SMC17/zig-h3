@@ -1,0 +1,655 @@
+//! Idiomatic Zig bindings for H3 v4 — Uber's hexagonal hierarchical spatial
+//! index. Wraps the `libh3` C library (vendored as a build dependency,
+//! v4.1.0); the Zig layer adds typed errors, slice-friendly APIs, and a
+//! `LatLng.fromDegrees` constructor so callers rarely touch radians directly.
+//!
+//! See https://h3geo.org/ for the H3 specification and concepts (cells,
+//! resolutions, pentagons, base cells, hierarchies).
+//!
+//! ## Status
+//!
+//! v0.1.0 covers ~30 of the ~70 H3 v4 public functions: lat/lng ↔ cell
+//! conversions, cell boundary geometry, resolution / base cell / pentagon
+//! inspection, hierarchical traversal (parent / children / center child),
+//! grid disk traversal, grid distance, formatting (h3 ↔ string), great-
+//! circle distances, cell area and edge-length helpers, and base-set
+//! enumeration. Directed-edge, vertex, polygon-to-cells, and local-IJ
+//! coordinate APIs are deferred to v0.2 — the underlying C functions are
+//! available via `c.*` for callers who need them now.
+
+const std = @import("std");
+const c = @cImport({
+    @cInclude("h3api.h");
+});
+
+/// Re-export the raw C bindings so callers can reach functions not yet wrapped
+/// in the idiomatic layer.
+pub const raw = c;
+
+/// Pure-Zig implementations of a growing subset of the H3 API. Cross-validated
+/// against the libh3-backed functions in this file via tests in
+/// `src/pure.zig`. See `pure.zig` docstring for the roadmap.
+pub const pure = @import("pure.zig");
+
+/// Phase 3 projection primitives — Vec3d / Vec2d / face geometry / CoordIJK.
+/// Foundation for the pure-Zig `latLngToCell` implementation.
+pub const proj = @import("pure_proj.zig");
+
+/// Phase 3b — pure-Zig `latLngToCell` plus the base cell tables, aperture-7
+/// hierarchy, digit/coord rotations, and H3 index bit-level operations.
+pub const h3index = @import("pure_h3index.zig");
+
+/// Phase 3c — pure-Zig `cellToLatLng` plus `h3ToFaceIjk`, the overage handler,
+/// `faceNeighbors` table, and the inverse spherical-projection helpers.
+pub const h3decode = @import("pure_h3decode.zig");
+
+/// Phase 4a — hierarchy operations: `cellToParent`, `cellToCenterChild`,
+/// `cellToChildrenSize`, `cellToChildren`.
+pub const hierarchy = @import("pure_hierarchy.zig");
+
+/// Phase 4c — `cellToBoundary` with substrate-grid vertex enumeration, pentagon
+/// vertex overage loop, and Class-III edge-crossing intersection logic.
+pub const boundary = @import("pure_boundary.zig");
+
+/// Phase 4e — grid traversal: `h3NeighborRotations`, `gridDiskUnsafe`,
+/// `gridDiskDistancesSafe`, `gridDisk`, `gridRingUnsafe`, `areNeighborCells`.
+pub const grid = @import("pure_grid.zig");
+
+/// Phase 4f — local-IJ coordinate subsystem: `cellToLocalIjk`, `gridDistance`,
+/// `compactCells`, `uncompactCells`, `maxFaceCount`, `getIcosahedronFaces`,
+/// plus `localIjkToCell`, `gridPathCells`, `gridPathCellsSize`.
+pub const localij = @import("pure_localij.zig");
+
+/// Phase 5a — vertex API: `cellToVertex`, `cellToVertexes`, `vertexToLatLng`,
+/// `isValidVertex`.
+pub const vertex = @import("pure_vertex.zig");
+
+/// Phase 5b — directed edge API: `cellsToDirectedEdge`, `getDirectedEdge*`,
+/// `directedEdgeToCells`, `originToDirectedEdges`, `isValidDirectedEdge`,
+/// `directedEdgeToBoundary`, `edgeLengthRads/Km/M`.
+pub const edge = @import("pure_edge.zig");
+
+/// Phase 5c — polygon ops: `maxPolygonToCellsSize`, `polygonToCells`,
+/// `pointInsidePolygon`, `bboxFromGeoLoop`.
+pub const polygon = @import("pure_polygon.zig");
+
+test {
+    _ = pure;
+    _ = proj;
+    _ = h3index;
+    _ = h3decode;
+    _ = hierarchy;
+    _ = boundary;
+    _ = grid;
+    _ = localij;
+    _ = vertex;
+    _ = edge;
+    _ = polygon;
+}
+
+/// 64-bit cell, edge, or vertex identifier in the H3 system.
+pub const H3Index = u64;
+
+/// Sentinel for "no valid index" — analogous to NaN.
+pub const H3_NULL: H3Index = 0;
+
+/// Maximum number of vertices in a `CellBoundary`. Worst case is a pentagon
+/// at a Class III resolution (5 original vertices + 5 edge crossings).
+pub const MAX_CELL_BOUNDARY_VERTS: usize = 10;
+
+/// Maximum valid H3 resolution (0–15 inclusive).
+pub const MAX_RES: i32 = 15;
+
+/// Typed error set covering every documented H3 error code. The raw u32
+/// returned by `libh3` is translated through `errorFromCode`.
+pub const Error = error{
+    /// Generic failure when no more specific code applies (`E_FAILED = 1`).
+    Failed,
+    /// Argument outside acceptable range without a more specific code (`E_DOMAIN`).
+    Domain,
+    /// Latitude or longitude outside acceptable range (`E_LATLNG_DOMAIN`).
+    LatLngDomain,
+    /// Resolution outside `[0, 15]` (`E_RES_DOMAIN`).
+    ResolutionDomain,
+    /// `H3Index` cell argument was not valid (`E_CELL_INVALID`).
+    CellInvalid,
+    /// `H3Index` directed-edge argument was not valid (`E_DIR_EDGE_INVALID`).
+    DirectedEdgeInvalid,
+    /// `H3Index` undirected-edge argument was not valid (`E_UNDIR_EDGE_INVALID`).
+    UndirectedEdgeInvalid,
+    /// `H3Index` vertex argument was not valid (`E_VERTEX_INVALID`).
+    VertexInvalid,
+    /// Pentagon distortion encountered — operation cannot handle it (`E_PENTAGON`).
+    Pentagon,
+    /// Duplicate input where the operation cannot handle it (`E_DUPLICATE_INPUT`).
+    DuplicateInput,
+    /// Two cell arguments were not neighbors (`E_NOT_NEIGHBORS`).
+    NotNeighbors,
+    /// Two cell arguments had incompatible resolutions (`E_RES_MISMATCH`).
+    ResolutionMismatch,
+    /// Necessary memory allocation failed inside libh3 (`E_MEMORY_ALLOC`).
+    MemoryAlloc,
+    /// Caller-provided buffer was too small (`E_MEMORY_BOUNDS`).
+    MemoryBounds,
+    /// Mode or flags argument was not valid (`E_OPTION_INVALID`).
+    OptionInvalid,
+    /// Error code outside the documented enum.
+    Unknown,
+};
+
+fn check(code: c.H3Error) Error!void {
+    return switch (code) {
+        0 => {},
+        1 => Error.Failed,
+        2 => Error.Domain,
+        3 => Error.LatLngDomain,
+        4 => Error.ResolutionDomain,
+        5 => Error.CellInvalid,
+        6 => Error.DirectedEdgeInvalid,
+        7 => Error.UndirectedEdgeInvalid,
+        8 => Error.VertexInvalid,
+        9 => Error.Pentagon,
+        10 => Error.DuplicateInput,
+        11 => Error.NotNeighbors,
+        12 => Error.ResolutionMismatch,
+        13 => Error.MemoryAlloc,
+        14 => Error.MemoryBounds,
+        15 => Error.OptionInvalid,
+        else => Error.Unknown,
+    };
+}
+
+/// Latitude / longitude in **radians**. Use `fromDegrees` to construct from
+/// degree-valued inputs.
+pub const LatLng = extern struct {
+    lat: f64,
+    lng: f64,
+
+    pub fn fromDegrees(lat_deg: f64, lng_deg: f64) LatLng {
+        return .{
+            .lat = c.degsToRads(lat_deg),
+            .lng = c.degsToRads(lng_deg),
+        };
+    }
+
+    pub fn latDegrees(self: LatLng) f64 {
+        return c.radsToDegs(self.lat);
+    }
+
+    pub fn lngDegrees(self: LatLng) f64 {
+        return c.radsToDegs(self.lng);
+    }
+};
+
+/// Cell boundary geometry: up to `MAX_CELL_BOUNDARY_VERTS` lat/lng points.
+pub const CellBoundary = extern struct {
+    num_verts: c_int,
+    verts: [MAX_CELL_BOUNDARY_VERTS]LatLng,
+
+    /// Return the boundary vertices as a slice of length `num_verts`.
+    pub fn slice(self: *const CellBoundary) []const LatLng {
+        return self.verts[0..@intCast(self.num_verts)];
+    }
+};
+
+comptime {
+    // Ensure layouts match the C structs so we can pass pointers directly.
+    std.debug.assert(@sizeOf(LatLng) == @sizeOf(c.LatLng));
+    std.debug.assert(@sizeOf(CellBoundary) == @sizeOf(c.CellBoundary));
+}
+
+fn cLatLng(p: LatLng) c.LatLng {
+    return .{ .lat = p.lat, .lng = p.lng };
+}
+
+// === Lat/lng ↔ cell ============================================================
+
+/// The H3 cell at resolution `res` (0–15) containing the given lat/lng point.
+pub fn latLngToCell(point: LatLng, res: i32) Error!H3Index {
+    var out: c.H3Index = 0;
+    const ll = cLatLng(point);
+    try check(c.latLngToCell(&ll, res, &out));
+    return out;
+}
+
+/// The lat/lng of the centroid of `cell`.
+pub fn cellToLatLng(cell: H3Index) Error!LatLng {
+    var out: c.LatLng = undefined;
+    try check(c.cellToLatLng(cell, &out));
+    return .{ .lat = out.lat, .lng = out.lng };
+}
+
+/// The polygonal boundary of `cell` in lat/lng coordinates.
+pub fn cellToBoundary(cell: H3Index) Error!CellBoundary {
+    var out: c.CellBoundary = undefined;
+    try check(c.cellToBoundary(cell, &out));
+    return @as(*const CellBoundary, @ptrCast(&out)).*;
+}
+
+// === Cell inspection ===========================================================
+
+/// Resolution of `cell` (0–15). Works on cells and directed edges.
+pub fn getResolution(cell: H3Index) i32 {
+    return c.getResolution(cell);
+}
+
+/// Base-cell index (0–121) of `cell`.
+pub fn getBaseCellNumber(cell: H3Index) i32 {
+    return c.getBaseCellNumber(cell);
+}
+
+/// True iff `cell` is a syntactically valid H3 cell.
+pub fn isValidCell(cell: H3Index) bool {
+    return c.isValidCell(cell) != 0;
+}
+
+/// True iff `cell` is one of the 12 pentagon cells at its resolution.
+pub fn isPentagon(cell: H3Index) bool {
+    return c.isPentagon(cell) != 0;
+}
+
+/// True iff `cell` is at a Class III resolution (1, 3, 5, 7, 9, 11, 13, 15).
+pub fn isResClassIII(cell: H3Index) bool {
+    return c.isResClassIII(cell) != 0;
+}
+
+/// True iff `a` and `b` share an edge. Returns `Error.ResolutionMismatch` if
+/// the cells are at different resolutions.
+pub fn areNeighborCells(a: H3Index, b: H3Index) Error!bool {
+    var out: c_int = 0;
+    try check(c.areNeighborCells(a, b, &out));
+    return out != 0;
+}
+
+/// Maximum number of icosahedron faces that `cell` intersects.
+pub fn maxFaceCount(cell: H3Index) Error!i32 {
+    var out: c_int = 0;
+    try check(c.maxFaceCount(cell, &out));
+    return out;
+}
+
+// === Hierarchy =================================================================
+
+/// The unique parent of `cell` at the coarser resolution `parent_res`.
+pub fn cellToParent(cell: H3Index, parent_res: i32) Error!H3Index {
+    var out: c.H3Index = 0;
+    try check(c.cellToParent(cell, parent_res, &out));
+    return out;
+}
+
+/// The center child of `cell` at the finer resolution `child_res`.
+pub fn cellToCenterChild(cell: H3Index, child_res: i32) Error!H3Index {
+    var out: c.H3Index = 0;
+    try check(c.cellToCenterChild(cell, child_res, &out));
+    return out;
+}
+
+/// Number of children of `cell` at the finer resolution `child_res`.
+pub fn cellToChildrenSize(cell: H3Index, child_res: i32) Error!i64 {
+    var out: i64 = 0;
+    try check(c.cellToChildrenSize(cell, child_res, &out));
+    return out;
+}
+
+/// Fill `out` with all children of `cell` at `child_res`. `out.len` must be
+/// at least `cellToChildrenSize(cell, child_res)`.
+pub fn cellToChildren(cell: H3Index, child_res: i32, out: []H3Index) Error!void {
+    try check(c.cellToChildren(cell, child_res, out.ptr));
+}
+
+// === Grid traversal ============================================================
+
+/// Maximum number of cells in a k-ring (`1 + 3 * k * (k + 1)`).
+pub fn maxGridDiskSize(k: i32) Error!i64 {
+    var out: i64 = 0;
+    try check(c.maxGridDiskSize(k, &out));
+    return out;
+}
+
+/// All cells within grid distance `k` of `origin`, including `origin` itself.
+/// `out.len` must be at least `maxGridDiskSize(k)`; unused trailing slots
+/// will be set to `H3_NULL`.
+pub fn gridDisk(origin: H3Index, k: i32, out: []H3Index) Error!void {
+    try check(c.gridDisk(origin, k, out.ptr));
+}
+
+/// Grid distance (minimum number of hex steps) between two cells.
+pub fn gridDistance(a: H3Index, b: H3Index) Error!i64 {
+    var out: i64 = 0;
+    try check(c.gridDistance(a, b, &out));
+    return out;
+}
+
+// === Formatting ================================================================
+
+/// Format `cell` as a lowercase hex string. The slice is a sub-slice of `buf`
+/// up to (but not including) the trailing null byte. `buf.len` should be at
+/// least 17 (16 hex digits + null terminator).
+pub fn h3ToString(cell: H3Index, buf: []u8) Error![]const u8 {
+    try check(c.h3ToString(cell, buf.ptr, buf.len));
+    const n = std.mem.indexOfScalar(u8, buf, 0) orelse buf.len;
+    return buf[0..n];
+}
+
+/// Parse a hex string into an H3Index. The input must be NUL-terminated.
+pub fn stringToH3(s: [:0]const u8) Error!H3Index {
+    var out: c.H3Index = 0;
+    try check(c.stringToH3(s.ptr, &out));
+    return out;
+}
+
+// === Distance and area =========================================================
+
+pub fn degsToRads(deg: f64) f64 {
+    return c.degsToRads(deg);
+}
+
+pub fn radsToDegs(rad: f64) f64 {
+    return c.radsToDegs(rad);
+}
+
+pub fn greatCircleDistanceRads(a: LatLng, b: LatLng) f64 {
+    const ca = cLatLng(a);
+    const cb = cLatLng(b);
+    return c.greatCircleDistanceRads(&ca, &cb);
+}
+
+pub fn greatCircleDistanceKm(a: LatLng, b: LatLng) f64 {
+    const ca = cLatLng(a);
+    const cb = cLatLng(b);
+    return c.greatCircleDistanceKm(&ca, &cb);
+}
+
+pub fn greatCircleDistanceM(a: LatLng, b: LatLng) f64 {
+    const ca = cLatLng(a);
+    const cb = cLatLng(b);
+    return c.greatCircleDistanceM(&ca, &cb);
+}
+
+pub fn cellAreaRads2(cell: H3Index) Error!f64 {
+    var out: f64 = 0;
+    try check(c.cellAreaRads2(cell, &out));
+    return out;
+}
+
+pub fn cellAreaKm2(cell: H3Index) Error!f64 {
+    var out: f64 = 0;
+    try check(c.cellAreaKm2(cell, &out));
+    return out;
+}
+
+pub fn cellAreaM2(cell: H3Index) Error!f64 {
+    var out: f64 = 0;
+    try check(c.cellAreaM2(cell, &out));
+    return out;
+}
+
+pub fn hexagonAreaAvgKm2(res: i32) Error!f64 {
+    var out: f64 = 0;
+    try check(c.getHexagonAreaAvgKm2(res, &out));
+    return out;
+}
+
+pub fn hexagonAreaAvgM2(res: i32) Error!f64 {
+    var out: f64 = 0;
+    try check(c.getHexagonAreaAvgM2(res, &out));
+    return out;
+}
+
+pub fn hexagonEdgeLengthAvgKm(res: i32) Error!f64 {
+    var out: f64 = 0;
+    try check(c.getHexagonEdgeLengthAvgKm(res, &out));
+    return out;
+}
+
+pub fn hexagonEdgeLengthAvgM(res: i32) Error!f64 {
+    var out: f64 = 0;
+    try check(c.getHexagonEdgeLengthAvgM(res, &out));
+    return out;
+}
+
+// === Resolution metadata =======================================================
+
+/// Total number of cells at resolution `res` (`2 + 120 * 7^res`).
+pub fn getNumCells(res: i32) Error!i64 {
+    var out: i64 = 0;
+    try check(c.getNumCells(res, &out));
+    return out;
+}
+
+/// Number of res-0 base cells (always 122).
+pub fn res0CellCount() i32 {
+    return c.res0CellCount();
+}
+
+/// Number of pentagons per resolution (always 12).
+pub fn pentagonCount() i32 {
+    return c.pentagonCount();
+}
+
+/// Fill `out` with all 122 res-0 base cells. `out.len` must be ≥ 122.
+pub fn getRes0Cells(out: []H3Index) Error!void {
+    if (out.len < @as(usize, @intCast(c.res0CellCount()))) return Error.MemoryBounds;
+    try check(c.getRes0Cells(out.ptr));
+}
+
+/// Fill `out` with the 12 pentagons at resolution `res`. `out.len` must be ≥ 12.
+pub fn getPentagons(res: i32, out: []H3Index) Error!void {
+    if (out.len < @as(usize, @intCast(c.pentagonCount()))) return Error.MemoryBounds;
+    try check(c.getPentagons(res, out.ptr));
+}
+
+// ===========================================================================
+// Tests
+// ===========================================================================
+
+const testing = std.testing;
+
+test "degsToRads and radsToDegs roundtrip" {
+    const r = degsToRads(45.0);
+    try testing.expectApproxEqAbs(@as(f64, std.math.pi / 4.0), r, 1e-12);
+    try testing.expectApproxEqAbs(@as(f64, 45.0), radsToDegs(r), 1e-12);
+}
+
+test "res0CellCount and pentagonCount are constants" {
+    try testing.expectEqual(@as(i32, 122), res0CellCount());
+    try testing.expectEqual(@as(i32, 12), pentagonCount());
+}
+
+test "getNumCells matches closed-form 2 + 120 * 7^r" {
+    var r: i32 = 0;
+    while (r <= 5) : (r += 1) {
+        const expected = blk: {
+            var x: i64 = 1;
+            var i: i32 = 0;
+            while (i < r) : (i += 1) x *= 7;
+            break :blk 2 + 120 * x;
+        };
+        try testing.expectEqual(expected, try getNumCells(r));
+    }
+}
+
+test "latLngToCell at NYC res 9 and resolution check" {
+    // Statue of Liberty area.
+    const sol = LatLng.fromDegrees(40.6892, -74.0445);
+    const cell = try latLngToCell(sol, 9);
+    try testing.expect(isValidCell(cell));
+    try testing.expectEqual(@as(i32, 9), getResolution(cell));
+    try testing.expect(!isPentagon(cell));
+}
+
+test "latLngToCell rejects invalid resolution" {
+    const sol = LatLng.fromDegrees(40.6892, -74.0445);
+    try testing.expectError(Error.ResolutionDomain, latLngToCell(sol, -1));
+    try testing.expectError(Error.ResolutionDomain, latLngToCell(sol, 16));
+}
+
+test "cellToLatLng roundtrip stays inside the same cell" {
+    const original = LatLng.fromDegrees(37.7749, -122.4194); // San Francisco
+    const cell = try latLngToCell(original, 9);
+    const center = try cellToLatLng(cell);
+    // Re-resolving the centroid must return the same cell.
+    const cell2 = try latLngToCell(center, 9);
+    try testing.expectEqual(cell, cell2);
+}
+
+test "cellToBoundary returns hexagon vertices for non-pentagon cell" {
+    const cell = try latLngToCell(LatLng.fromDegrees(37.7749, -122.4194), 9);
+    const bnd = try cellToBoundary(cell);
+    try testing.expectEqual(@as(c_int, 6), bnd.num_verts);
+    try testing.expectEqual(@as(usize, 6), bnd.slice().len);
+}
+
+test "maxGridDiskSize matches closed form 1 + 3 * k * (k + 1)" {
+    var k: i32 = 0;
+    while (k <= 5) : (k += 1) {
+        const kk: i64 = k;
+        const expected = 1 + 3 * kk * (kk + 1);
+        try testing.expectEqual(expected, try maxGridDiskSize(k));
+    }
+}
+
+test "gridDisk at k=0 returns only the origin" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.0, -74.0), 9);
+    var out: [1]H3Index = .{0};
+    try gridDisk(cell, 0, &out);
+    try testing.expectEqual(cell, out[0]);
+}
+
+test "gridDisk at k=1 returns 7 cells including origin" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.0, -74.0), 9);
+    var out: [7]H3Index = .{0} ** 7;
+    try gridDisk(cell, 1, &out);
+
+    var found_origin = false;
+    var non_null: usize = 0;
+    for (out) |v| {
+        if (v == cell) found_origin = true;
+        if (v != H3_NULL) non_null += 1;
+    }
+    try testing.expect(found_origin);
+    try testing.expectEqual(@as(usize, 7), non_null);
+}
+
+test "gridDistance origin to itself is 0" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.0, -74.0), 9);
+    try testing.expectEqual(@as(i64, 0), try gridDistance(cell, cell));
+}
+
+test "gridDistance to a k=1 neighbor is 1" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.0, -74.0), 9);
+    var ring: [7]H3Index = .{0} ** 7;
+    try gridDisk(cell, 1, &ring);
+    for (ring) |neighbor| {
+        if (neighbor == H3_NULL or neighbor == cell) continue;
+        try testing.expectEqual(@as(i64, 1), try gridDistance(cell, neighbor));
+        try testing.expect(try areNeighborCells(cell, neighbor));
+        break;
+    } else return error.NoNeighborFound;
+}
+
+test "cellToParent then cellToChildren roundtrip" {
+    const sf = LatLng.fromDegrees(37.7749, -122.4194);
+    const fine = try latLngToCell(sf, 9);
+    const parent = try cellToParent(fine, 7);
+    try testing.expectEqual(@as(i32, 7), getResolution(parent));
+
+    const child_count = try cellToChildrenSize(parent, 9);
+    try testing.expectEqual(@as(i64, 49), child_count); // 7^2
+
+    const children = try testing.allocator.alloc(H3Index, @intCast(child_count));
+    defer testing.allocator.free(children);
+    try cellToChildren(parent, 9, children);
+
+    var contains_original = false;
+    for (children) |child| if (child == fine) {
+        contains_original = true;
+        break;
+    };
+    try testing.expect(contains_original);
+}
+
+test "cellToCenterChild then cellToParent inverts" {
+    const cell = try latLngToCell(LatLng.fromDegrees(0.0, 0.0), 5);
+    const center = try cellToCenterChild(cell, 10);
+    try testing.expectEqual(@as(i32, 10), getResolution(center));
+    try testing.expectEqual(cell, try cellToParent(center, 5));
+}
+
+test "h3ToString and stringToH3 roundtrip" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    var buf: [17]u8 = undefined;
+    const s = try h3ToString(cell, &buf);
+
+    // Convert the slice to a null-terminated string for stringToH3.
+    var zbuf: [17]u8 = undefined;
+    @memcpy(zbuf[0..s.len], s);
+    zbuf[s.len] = 0;
+    const z: [:0]const u8 = zbuf[0..s.len :0];
+    try testing.expectEqual(cell, try stringToH3(z));
+}
+
+test "greatCircleDistanceKm: SF → NYC ~ 4140 km" {
+    const sf = LatLng.fromDegrees(37.7749, -122.4194);
+    const nyc = LatLng.fromDegrees(40.7128, -74.0060);
+    const km = greatCircleDistanceKm(sf, nyc);
+    try testing.expect(km > 4100.0 and km < 4200.0);
+}
+
+test "cellAreaKm2 at res 9 is ~0.105 km²" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    const area = try cellAreaKm2(cell);
+    // Average res-9 hexagon area is ~0.105 km²; specific cells deviate.
+    try testing.expect(area > 0.05 and area < 0.2);
+}
+
+test "hexagonAreaAvgKm2 at res 0 is ~4.36 million km²" {
+    const a = try hexagonAreaAvgKm2(0);
+    try testing.expect(a > 4_000_000.0 and a < 5_000_000.0);
+}
+
+test "getRes0Cells returns 122 valid cells" {
+    var cells: [122]H3Index = undefined;
+    try getRes0Cells(&cells);
+    for (cells) |cell| {
+        try testing.expect(isValidCell(cell));
+        try testing.expectEqual(@as(i32, 0), getResolution(cell));
+    }
+}
+
+test "getPentagons returns 12 pentagons at every resolution" {
+    var r: i32 = 0;
+    while (r <= 5) : (r += 1) {
+        var pents: [12]H3Index = undefined;
+        try getPentagons(r, &pents);
+        for (pents) |p| {
+            try testing.expect(isPentagon(p));
+            try testing.expectEqual(r, getResolution(p));
+        }
+    }
+}
+
+test "stringToH3 rejects malformed input" {
+    // libh3 returns generic E_FAILED for unparseable strings; E_CELL_INVALID
+    // is reserved for syntactically-valid-but-not-a-real-cell inputs.
+    try testing.expectError(Error.Failed, stringToH3("notahex"));
+}
+
+test "isValidCell rejects zero and arbitrary garbage" {
+    try testing.expect(!isValidCell(0));
+    try testing.expect(!isValidCell(0xdeadbeef));
+}
+
+test "getBaseCellNumber on res-0 cell equals its own number" {
+    var cells: [122]H3Index = undefined;
+    try getRes0Cells(&cells);
+    // The 122 base cells in the returned order have base-cell numbers 0..121.
+    for (cells, 0..) |cell, i| {
+        try testing.expectEqual(@as(i32, @intCast(i)), getBaseCellNumber(cell));
+    }
+}
+
+test "areNeighborCells false for same cell" {
+    const cell = try latLngToCell(LatLng.fromDegrees(0.0, 0.0), 5);
+    try testing.expect(!(try areNeighborCells(cell, cell)));
+}
