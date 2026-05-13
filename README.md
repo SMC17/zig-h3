@@ -250,3 +250,13 @@ zig build test
 ```
 
 24 tests, all currently passing on Zig 0.16.0.
+
+## Part of the Sovereign Stack
+
+This is one of a set of small, composable Zig libraries.
+
+- [**zig-graph**](https://github.com/SMC17/zig-graph) — sparse graph + spectral algorithms (composes naturally over the H3 cell adjacency graph)
+- [**zig-cobs**](https://github.com/SMC17/zig-cobs) — COBS byte-stuffing framing
+- [**zig-frame-protocol**](https://github.com/SMC17/zig-frame-protocol) — versioned binary frame protocol
+
+See [github.com/SMC17](https://github.com/SMC17) for the full portfolio.
