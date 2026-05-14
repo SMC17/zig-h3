@@ -439,6 +439,83 @@ pub fn getPentagons(res: i32, out: []H3Index) Error!void {
     try check(c.getPentagons(res, out.ptr));
 }
 
+// === Directed edges ============================================================
+
+/// Maximum number of directed edges per cell (6 for hexagons, 5 for pentagons).
+pub const MAX_DIRECTED_EDGES_PER_CELL: usize = 6;
+
+/// Build the directed-edge H3 index from an `origin` cell to a neighboring
+/// `destination` cell. Returns `Error.NotNeighbors` if the two cells do not
+/// share an edge, or `Error.ResolutionMismatch` if they are at different
+/// resolutions.
+pub fn cellsToDirectedEdge(origin: H3Index, destination: H3Index) Error!H3Index {
+    var out: c.H3Index = 0;
+    try check(c.cellsToDirectedEdge(origin, destination, &out));
+    return out;
+}
+
+/// True iff `edge_idx` is a syntactically valid H3 directed-edge index.
+pub fn isValidDirectedEdge(edge_idx: H3Index) bool {
+    return c.isValidDirectedEdge(edge_idx) != 0;
+}
+
+/// Origin cell of the directed edge.
+pub fn getDirectedEdgeOrigin(edge_idx: H3Index) Error!H3Index {
+    var out: c.H3Index = 0;
+    try check(c.getDirectedEdgeOrigin(edge_idx, &out));
+    return out;
+}
+
+/// Destination cell of the directed edge.
+pub fn getDirectedEdgeDestination(edge_idx: H3Index) Error!H3Index {
+    var out: c.H3Index = 0;
+    try check(c.getDirectedEdgeDestination(edge_idx, &out));
+    return out;
+}
+
+/// Both endpoints of a directed edge as `.{ origin, destination }`.
+pub fn directedEdgeToCells(edge_idx: H3Index) Error![2]H3Index {
+    var out: [2]c.H3Index = .{ 0, 0 };
+    try check(c.directedEdgeToCells(edge_idx, &out));
+    return .{ out[0], out[1] };
+}
+
+/// Fill `out` with the 6 (hexagon) or 5 (pentagon) directed edges originating
+/// at `origin`. `out.len` must be at least `MAX_DIRECTED_EDGES_PER_CELL` (6);
+/// unused trailing slots are set to `H3_NULL`.
+pub fn originToDirectedEdges(origin: H3Index, out: []H3Index) Error!void {
+    if (out.len < MAX_DIRECTED_EDGES_PER_CELL) return Error.MemoryBounds;
+    try check(c.originToDirectedEdges(origin, out.ptr));
+}
+
+/// Polygonal boundary (two lat/lng endpoints) of a directed edge.
+pub fn directedEdgeToBoundary(edge_idx: H3Index) Error!CellBoundary {
+    var out: c.CellBoundary = undefined;
+    try check(c.directedEdgeToBoundary(edge_idx, &out));
+    return @as(*const CellBoundary, @ptrCast(&out)).*;
+}
+
+/// Exact length of a directed edge in radians.
+pub fn edgeLengthRads(edge_idx: H3Index) Error!f64 {
+    var out: f64 = 0;
+    try check(c.edgeLengthRads(edge_idx, &out));
+    return out;
+}
+
+/// Exact length of a directed edge in kilometers.
+pub fn edgeLengthKm(edge_idx: H3Index) Error!f64 {
+    var out: f64 = 0;
+    try check(c.edgeLengthKm(edge_idx, &out));
+    return out;
+}
+
+/// Exact length of a directed edge in meters.
+pub fn edgeLengthM(edge_idx: H3Index) Error!f64 {
+    var out: f64 = 0;
+    try check(c.edgeLengthM(edge_idx, &out));
+    return out;
+}
+
 // ===========================================================================
 // Tests
 // ===========================================================================
@@ -652,4 +729,99 @@ test "getBaseCellNumber on res-0 cell equals its own number" {
 test "areNeighborCells false for same cell" {
     const cell = try latLngToCell(LatLng.fromDegrees(0.0, 0.0), 5);
     try testing.expect(!(try areNeighborCells(cell, cell)));
+}
+
+// === Directed-edge tests =======================================================
+
+test "cellsToDirectedEdge: NYC res 9 origin to one of its k=1 neighbors" {
+    const origin = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    var ring: [7]H3Index = .{0} ** 7;
+    try gridDisk(origin, 1, &ring);
+    for (ring) |dest| {
+        if (dest == H3_NULL or dest == origin) continue;
+        const edge_idx = try cellsToDirectedEdge(origin, dest);
+        try testing.expect(isValidDirectedEdge(edge_idx));
+        try testing.expectEqual(origin, try getDirectedEdgeOrigin(edge_idx));
+        try testing.expectEqual(dest, try getDirectedEdgeDestination(edge_idx));
+        const pair = try directedEdgeToCells(edge_idx);
+        try testing.expectEqual(origin, pair[0]);
+        try testing.expectEqual(dest, pair[1]);
+        return;
+    }
+    return error.NoNeighborFound;
+}
+
+test "cellsToDirectedEdge: non-neighbors rejected" {
+    const a = try latLngToCell(LatLng.fromDegrees(40.0, -74.0), 9);
+    const b = try latLngToCell(LatLng.fromDegrees(40.5, -74.0), 9);
+    try testing.expectError(Error.NotNeighbors, cellsToDirectedEdge(a, b));
+}
+
+test "isValidDirectedEdge rejects a cell and zero" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.0, -74.0), 9);
+    try testing.expect(!isValidDirectedEdge(cell));
+    try testing.expect(!isValidDirectedEdge(0));
+}
+
+test "originToDirectedEdges yields 6 valid edges for a non-pentagon cell" {
+    const origin = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    var edges: [MAX_DIRECTED_EDGES_PER_CELL]H3Index = .{0} ** MAX_DIRECTED_EDGES_PER_CELL;
+    try originToDirectedEdges(origin, &edges);
+    var valid: usize = 0;
+    for (edges) |e| {
+        if (e == H3_NULL) continue;
+        try testing.expect(isValidDirectedEdge(e));
+        try testing.expectEqual(origin, try getDirectedEdgeOrigin(e));
+        valid += 1;
+    }
+    try testing.expectEqual(@as(usize, 6), valid);
+}
+
+test "originToDirectedEdges yields 5 valid edges for a pentagon" {
+    var pents: [12]H3Index = undefined;
+    try getPentagons(3, &pents);
+    var edges: [MAX_DIRECTED_EDGES_PER_CELL]H3Index = .{0} ** MAX_DIRECTED_EDGES_PER_CELL;
+    try originToDirectedEdges(pents[0], &edges);
+    var valid: usize = 0;
+    for (edges) |e| {
+        if (e == H3_NULL) continue;
+        try testing.expect(isValidDirectedEdge(e));
+        valid += 1;
+    }
+    try testing.expectEqual(@as(usize, 5), valid);
+}
+
+test "directedEdgeToBoundary returns two endpoints" {
+    const origin = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    var ring: [7]H3Index = .{0} ** 7;
+    try gridDisk(origin, 1, &ring);
+    for (ring) |dest| {
+        if (dest == H3_NULL or dest == origin) continue;
+        const edge_idx = try cellsToDirectedEdge(origin, dest);
+        const bnd = try directedEdgeToBoundary(edge_idx);
+        try testing.expectEqual(@as(c_int, 2), bnd.num_verts);
+        try testing.expectEqual(@as(usize, 2), bnd.slice().len);
+        return;
+    }
+    return error.NoNeighborFound;
+}
+
+test "edgeLengthKm at res 9 is roughly hexagonEdgeLengthAvgKm" {
+    const origin = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    var ring: [7]H3Index = .{0} ** 7;
+    try gridDisk(origin, 1, &ring);
+    for (ring) |dest| {
+        if (dest == H3_NULL or dest == origin) continue;
+        const edge_idx = try cellsToDirectedEdge(origin, dest);
+        const km = try edgeLengthKm(edge_idx);
+        const avg_km = try hexagonEdgeLengthAvgKm(9);
+        // Specific edges deviate from the average; should be within ~30%.
+        try testing.expect(km > 0.5 * avg_km and km < 2.0 * avg_km);
+        const m = try edgeLengthM(edge_idx);
+        try testing.expectApproxEqRel(km * 1000.0, m, 1e-9);
+        const rads = try edgeLengthRads(edge_idx);
+        try testing.expect(rads > 0.0);
+        return;
+    }
+    return error.NoNeighborFound;
 }
