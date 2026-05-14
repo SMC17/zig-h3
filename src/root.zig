@@ -547,6 +547,110 @@ pub fn isValidVertex(vertex_idx: H3Index) bool {
     return c.isValidVertex(vertex_idx) != 0;
 }
 
+// === Polygon ↔ cells ===========================================================
+
+/// GeoJSON-style polygon ring (closed loop of lat/lng vertices, in **radians**).
+/// Matches `libh3.GeoLoop`.
+pub const GeoLoop = extern struct {
+    num_verts: c_int,
+    verts: [*]LatLng,
+};
+
+/// GeoJSON-style polygon (exterior ring plus optional interior "hole" rings),
+/// in **radians**. Matches `libh3.GeoPolygon`.
+pub const GeoPolygon = extern struct {
+    geoloop: GeoLoop,
+    num_holes: c_int,
+    holes: ?[*]GeoLoop,
+};
+
+comptime {
+    std.debug.assert(@sizeOf(GeoLoop) == @sizeOf(c.GeoLoop));
+    std.debug.assert(@sizeOf(GeoPolygon) == @sizeOf(c.GeoPolygon));
+}
+
+/// Flags accepted by `polygonToCells`. Mirrors libh3's `polygonToCellsFlags`
+/// enum, but exposed as a typed enum for clarity.
+pub const ContainmentMode = enum(u32) {
+    /// Cell center is inside the polygon (libh3's default, fastest).
+    center = 0,
+    /// Any part of the cell intersects the polygon (overestimating coverage).
+    full_overlap = 1,
+    /// Cell is entirely contained inside the polygon (underestimating).
+    full_containment = 2,
+    /// Centers AND full containment — strictest interpretation.
+    overlapping_bbox = 3,
+};
+
+/// Upper bound on the number of cells `polygonToCells` will produce. Use this
+/// to size the output buffer.
+pub fn maxPolygonToCellsSize(poly: *const GeoPolygon, res: i32, flags: ContainmentMode) Error!i64 {
+    var out: i64 = 0;
+    const cpoly: *const c.GeoPolygon = @ptrCast(poly);
+    try check(c.maxPolygonToCellsSize(cpoly, res, @intFromEnum(flags), &out));
+    return out;
+}
+
+/// Fill `out` with the cells covering `poly` at resolution `res`.
+/// `out.len` must be at least `maxPolygonToCellsSize(poly, res, flags)`.
+/// Unused trailing slots are set to `H3_NULL`.
+pub fn polygonToCells(
+    poly: *const GeoPolygon,
+    res: i32,
+    flags: ContainmentMode,
+    out: []H3Index,
+) Error!void {
+    const cpoly: *const c.GeoPolygon = @ptrCast(poly);
+    try check(c.polygonToCells(cpoly, res, @intFromEnum(flags), out.ptr));
+}
+
+/// Linked-list polygon representation used by `cellsToMultiPolygon`. Owns its
+/// memory; call `deinit` to free it back to libh3.
+pub const LinkedMultiPolygon = struct {
+    inner: c.LinkedGeoPolygon,
+
+    /// Iterate the polygons in the result.
+    pub const PolygonIterator = struct {
+        cur: ?*c.LinkedGeoPolygon,
+
+        pub fn next(self: *PolygonIterator) ?*c.LinkedGeoPolygon {
+            const ret = self.cur orelse return null;
+            self.cur = ret.next;
+            return ret;
+        }
+    };
+
+    pub fn polygons(self: *LinkedMultiPolygon) PolygonIterator {
+        // The libh3 contract is that the first polygon is the head struct
+        // itself if it has any loops, otherwise it's `.next`. We expose the
+        // raw chain — callers walk it through libh3 types directly.
+        return .{ .cur = &self.inner };
+    }
+
+    /// Count the number of polygons (linked nodes with any geo content).
+    pub fn count(self: *LinkedMultiPolygon) usize {
+        var n: usize = 0;
+        var it = self.polygons();
+        while (it.next()) |p| {
+            if (p.first != null) n += 1;
+        }
+        return n;
+    }
+
+    pub fn deinit(self: *LinkedMultiPolygon) void {
+        c.destroyLinkedMultiPolygon(&self.inner);
+    }
+};
+
+/// Build a linked multi-polygon (one or more outer rings, each with optional
+/// holes) covering a set of contiguous cells. The result owns heap memory
+/// inside libh3; call `deinit` to release it.
+pub fn cellsToMultiPolygon(cells: []const H3Index) Error!LinkedMultiPolygon {
+    var out: c.LinkedGeoPolygon = std.mem.zeroes(c.LinkedGeoPolygon);
+    try check(c.cellsToLinkedMultiPolygon(cells.ptr, @intCast(cells.len), &out));
+    return .{ .inner = out };
+}
+
 // ===========================================================================
 // Tests
 // ===========================================================================
@@ -909,4 +1013,54 @@ test "isValidVertex rejects a cell" {
     const cell = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
     try testing.expect(!isValidVertex(cell));
     try testing.expect(!isValidVertex(0));
+}
+
+// === Polygon ↔ cells tests =====================================================
+
+test "polygonToCells: small NYC bbox at res 7 produces a sensible count" {
+    // A ~0.1° × 0.1° square around Times Square. Counter-clockwise. Closed
+    // loop convention: libh3 does not require an explicit closing vertex.
+    var verts = [_]LatLng{
+        LatLng.fromDegrees(40.75, -74.05),
+        LatLng.fromDegrees(40.85, -74.05),
+        LatLng.fromDegrees(40.85, -73.95),
+        LatLng.fromDegrees(40.75, -73.95),
+    };
+    var poly = GeoPolygon{
+        .geoloop = .{ .num_verts = verts.len, .verts = &verts },
+        .num_holes = 0,
+        .holes = null,
+    };
+    const max = try maxPolygonToCellsSize(&poly, 7, .center);
+    try testing.expect(max > 0);
+    const buf = try testing.allocator.alloc(H3Index, @intCast(max));
+    defer testing.allocator.free(buf);
+    @memset(buf, H3_NULL);
+    try polygonToCells(&poly, 7, .center, buf);
+    var n: usize = 0;
+    for (buf) |cell| {
+        if (cell == H3_NULL) continue;
+        try testing.expect(isValidCell(cell));
+        try testing.expectEqual(@as(i32, 7), getResolution(cell));
+        n += 1;
+    }
+    // 0.1° × 0.1° at NYC latitude is ~123 km² ≈ 230 res-7 cells.
+    try testing.expect(n > 10 and n < 1000);
+}
+
+test "cellsToMultiPolygon: a single cell rounds to a single polygon" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    const cells = [_]H3Index{cell};
+    var mp = try cellsToMultiPolygon(&cells);
+    defer mp.deinit();
+    try testing.expect(mp.count() == 1);
+}
+
+test "cellsToMultiPolygon: gridDisk(k=1) is one polygon" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    var ring: [7]H3Index = .{0} ** 7;
+    try gridDisk(cell, 1, &ring);
+    var mp = try cellsToMultiPolygon(&ring);
+    defer mp.deinit();
+    try testing.expectEqual(@as(usize, 1), mp.count());
 }
