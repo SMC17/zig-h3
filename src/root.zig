@@ -698,6 +698,66 @@ pub fn gridPathCells(start: H3Index, end: H3Index, out: []H3Index) Error!void {
     try check(c.gridPathCells(start, end, out.ptr));
 }
 
+// === Compact / uncompact =======================================================
+
+/// Compact a contiguous set of same-resolution cells into the minimal set of
+/// mixed-resolution cells covering the same area. `out.len` must be at least
+/// `cells.len` (libh3 contract — the worst case is no compaction). Unused
+/// trailing slots are set to `H3_NULL`.
+pub fn compactCells(cells: []const H3Index, out: []H3Index) Error!void {
+    if (out.len < cells.len) return Error.MemoryBounds;
+    try check(c.compactCells(cells.ptr, out.ptr, @intCast(cells.len)));
+}
+
+/// Exact number of cells produced by `uncompactCells(cells, res, …)`. Use this
+/// to size the output buffer.
+pub fn uncompactCellsSize(cells: []const H3Index, res: i32) Error!i64 {
+    var out: i64 = 0;
+    try check(c.uncompactCellsSize(cells.ptr, @intCast(cells.len), res, &out));
+    return out;
+}
+
+/// Expand a compacted set of mixed-resolution cells back into the equivalent
+/// uniform-resolution set at `res`. `out.len` must be at least
+/// `uncompactCellsSize(cells, res)`.
+pub fn uncompactCells(cells: []const H3Index, res: i32, out: []H3Index) Error!void {
+    try check(c.uncompactCells(
+        cells.ptr,
+        @intCast(cells.len),
+        out.ptr,
+        @intCast(out.len),
+        res,
+    ));
+}
+
+// === Icosahedron faces =========================================================
+
+/// Fill `out` with the icosahedron face indices (0–19) that `cell` intersects.
+/// `out.len` must be at least `maxFaceCount(cell)`. Unused trailing slots are
+/// set to `-1`.
+pub fn getIcosahedronFaces(cell: H3Index, out: []i32) Error!void {
+    const max = try maxFaceCount(cell);
+    if (out.len < @as(usize, @intCast(max))) return Error.MemoryBounds;
+    try check(c.getIcosahedronFaces(cell, @ptrCast(out.ptr)));
+}
+
+// === Hierarchy positions =======================================================
+
+/// Ordinal position of `child` within its parent's children list at `parent_res`.
+pub fn cellToChildPos(child: H3Index, parent_res: i32) Error!i64 {
+    var out: i64 = 0;
+    try check(c.cellToChildPos(child, parent_res, &out));
+    return out;
+}
+
+/// Inverse of `cellToChildPos` — child cell at `child_pos` within `parent` at
+/// resolution `child_res`.
+pub fn childPosToCell(child_pos: i64, parent: H3Index, child_res: i32) Error!H3Index {
+    var out: c.H3Index = 0;
+    try check(c.childPosToCell(child_pos, parent, child_res, &out));
+    return out;
+}
+
 // ===========================================================================
 // Tests
 // ===========================================================================
@@ -1163,4 +1223,73 @@ test "gridPathCells: short path includes endpoints and is contiguous" {
         return;
     }
     return error.NoNeighborFound;
+}
+
+// === Compact / uncompact tests =================================================
+
+test "compactCells: all 7 children of a hexagon compact to its parent" {
+    const parent = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 8);
+    const child_count = try cellToChildrenSize(parent, 9);
+    const children = try testing.allocator.alloc(H3Index, @intCast(child_count));
+    defer testing.allocator.free(children);
+    try cellToChildren(parent, 9, children);
+
+    const compact_buf = try testing.allocator.alloc(H3Index, children.len);
+    defer testing.allocator.free(compact_buf);
+    @memset(compact_buf, H3_NULL);
+    try compactCells(children, compact_buf);
+
+    var non_null: usize = 0;
+    var found_parent = false;
+    for (compact_buf) |cell| {
+        if (cell == H3_NULL) continue;
+        non_null += 1;
+        if (cell == parent) found_parent = true;
+    }
+    try testing.expectEqual(@as(usize, 1), non_null);
+    try testing.expect(found_parent);
+}
+
+test "uncompactCells + uncompactCellsSize: parent uncompacts to all its children" {
+    const parent = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 8);
+    const cells = [_]H3Index{parent};
+    const expected = try cellToChildrenSize(parent, 10);
+    try testing.expectEqual(expected, try uncompactCellsSize(&cells, 10));
+    const buf = try testing.allocator.alloc(H3Index, @intCast(expected));
+    defer testing.allocator.free(buf);
+    try uncompactCells(&cells, 10, buf);
+    for (buf) |c_| {
+        try testing.expect(isValidCell(c_));
+        try testing.expectEqual(@as(i32, 10), getResolution(c_));
+        try testing.expectEqual(parent, try cellToParent(c_, 8));
+    }
+}
+
+// === Icosahedron face tests ====================================================
+
+test "getIcosahedronFaces returns >= 1 face for a cell" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    const max: usize = @intCast(try maxFaceCount(cell));
+    try testing.expect(max >= 1);
+    const faces = try testing.allocator.alloc(i32, max);
+    defer testing.allocator.free(faces);
+    @memset(faces, -1);
+    try getIcosahedronFaces(cell, faces);
+    var seen: usize = 0;
+    for (faces) |f| {
+        if (f < 0) continue;
+        try testing.expect(f >= 0 and f < 20);
+        seen += 1;
+    }
+    try testing.expect(seen >= 1);
+}
+
+// === Child position tests ======================================================
+
+test "cellToChildPos and childPosToCell roundtrip" {
+    const fine = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    const pos = try cellToChildPos(fine, 7);
+    try testing.expect(pos >= 0 and pos < 49); // 7^2
+    const parent = try cellToParent(fine, 7);
+    try testing.expectEqual(fine, try childPosToCell(pos, parent, 9));
 }
