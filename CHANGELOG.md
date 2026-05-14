@@ -1,3 +1,49 @@
+## v1.1.0 — 2026-05-13
+
+**Full H3 v4 grid/edge/vertex/polygon/IJ/compact/path API coverage.**
+
+Wrapper-layer coverage grew from ~30 functions in v1.0.0 to 63 of the
+~70 public H3 v4 functions. All additions follow the established
+`Error!T` pattern with no hidden allocations — callers size buffers via
+the companion `*Size` helpers.
+
+### Added
+- **Directed edges** (8 wrappers + `MAX_DIRECTED_EDGES_PER_CELL`):
+  `cellsToDirectedEdge`, `isValidDirectedEdge`, `getDirectedEdgeOrigin`,
+  `getDirectedEdgeDestination`, `directedEdgeToCells`,
+  `originToDirectedEdges`, `directedEdgeToBoundary`,
+  `edgeLengthRads`/`Km`/`M`.
+- **Vertices** (4 wrappers + `MAX_VERTEXES_PER_CELL`):
+  `cellToVertex`, `cellToVertexes`, `vertexToLatLng`, `isValidVertex`.
+- **Polygon ↔ cells** (3 wrappers + `GeoLoop`/`GeoPolygon` extern
+  structs + `ContainmentMode` enum + `LinkedMultiPolygon` RAII
+  wrapper): `maxPolygonToCellsSize`, `polygonToCells`,
+  `cellsToMultiPolygon`. `LinkedMultiPolygon.deinit()` calls
+  `destroyLinkedMultiPolygon` so callers don't manage the libh3 heap
+  directly.
+- **Local IJ coordinates** (2 wrappers + `CoordIJ` extern struct):
+  `cellToLocalIj`, `localIjToCell`.
+- **Grid path** (2 wrappers): `gridPathCells`, `gridPathCellsSize`.
+- **Compact / uncompact** (3 wrappers): `compactCells`,
+  `uncompactCells`, `uncompactCellsSize`.
+- **Icosahedron faces** (1 wrapper, pairs with the already-wrapped
+  `maxFaceCount`): `getIcosahedronFaces`.
+- **Hierarchy positions** (2 wrappers): `cellToChildPos`,
+  `childPosToCell`.
+
+### Tests
+- 22 new wrapper-level tests, growing the total from 144 → 166.
+- Each family ships at least 2 tests including a known-good NYC res-9
+  anchor pair plus an edge-case (non-neighbor rejection, pentagon
+  vs hexagon edge/vertex count, polygon containment-mode sanity,
+  compact roundtrip on a full subtree).
+
+### Documentation
+- Status section rewritten to reflect actual coverage. The previous
+  "deferred to v0.2" sentence has been removed; "Out of scope" now
+  honestly lists the remaining 6 unwrapped grid-traversal variants.
+- API listing expanded to include every new function signature.
+
 ## v1.0.0 — 2026-05-13
 
 **Production-grade hygiene milestone.**
