@@ -651,6 +651,37 @@ pub fn cellsToMultiPolygon(cells: []const H3Index) Error!LinkedMultiPolygon {
     return .{ .inner = out };
 }
 
+// === Local IJ coordinates ======================================================
+
+/// Two-dimensional axial coordinate pair used by `cellToLocalIj` /
+/// `localIjToCell`. Layout matches `libh3.CoordIJ`.
+pub const CoordIJ = extern struct {
+    i: c_int,
+    j: c_int,
+};
+
+comptime {
+    std.debug.assert(@sizeOf(CoordIJ) == @sizeOf(c.CoordIJ));
+}
+
+/// Local IJ coordinate of `cell` relative to `origin`. `mode` is reserved by
+/// libh3 — pass `0`. Returns `Error.Pentagon` or `Error.Failed` when the
+/// origin's local frame cannot represent the cell.
+pub fn cellToLocalIj(origin: H3Index, cell: H3Index, mode: u32) Error!CoordIJ {
+    var out: c.CoordIJ = .{ .i = 0, .j = 0 };
+    try check(c.cellToLocalIj(origin, cell, mode, &out));
+    return .{ .i = out.i, .j = out.j };
+}
+
+/// Cell at local IJ coordinate `ij` relative to `origin`. `mode` is reserved by
+/// libh3 — pass `0`.
+pub fn localIjToCell(origin: H3Index, ij: CoordIJ, mode: u32) Error!H3Index {
+    var out: c.H3Index = 0;
+    const cij: c.CoordIJ = .{ .i = ij.i, .j = ij.j };
+    try check(c.localIjToCell(origin, &cij, mode, &out));
+    return out;
+}
+
 // ===========================================================================
 // Tests
 // ===========================================================================
@@ -1063,4 +1094,25 @@ test "cellsToMultiPolygon: gridDisk(k=1) is one polygon" {
     var mp = try cellsToMultiPolygon(&ring);
     defer mp.deinit();
     try testing.expectEqual(@as(usize, 1), mp.count());
+}
+
+// === Local IJ tests ============================================================
+
+test "cellToLocalIj: origin roundtrips through localIjToCell" {
+    const origin = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    const ij = try cellToLocalIj(origin, origin, 0);
+    // libh3 doesn't pin the origin to (0,0); the contract is that the IJ
+    // coordinate inverts back to the same cell.
+    try testing.expectEqual(origin, try localIjToCell(origin, ij, 0));
+}
+
+test "cellToLocalIj: k=1 neighbors all round-trip" {
+    const origin = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    var ring: [7]H3Index = .{0} ** 7;
+    try gridDisk(origin, 1, &ring);
+    for (ring) |cell| {
+        if (cell == H3_NULL) continue;
+        const ij = try cellToLocalIj(origin, cell, 0);
+        try testing.expectEqual(cell, try localIjToCell(origin, ij, 0));
+    }
 }
