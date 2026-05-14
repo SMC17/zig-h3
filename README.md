@@ -11,21 +11,36 @@ time, cached thereafter.
 
 ## Status
 
-`v0.1.0` — covers ~30 of the ~70 H3 v4 public functions:
+`v1.1.0` — covers 63 of the ~70 H3 v4 public functions, spanning the
+full grid / edge / vertex / polygon / IJ / compact / path API:
 
 - Lat/lng ↔ cell conversions
 - Cell boundary geometry
 - Resolution / base cell / pentagon / Class III inspection
-- Hierarchical traversal (parent, children, center child)
+- Hierarchical traversal (parent, children, center child, child-position
+  in ordered children list)
 - Grid disk traversal + grid distance + neighbor check
+- **Directed edges** (`cellsToDirectedEdge`, `isValidDirectedEdge`,
+  `getDirectedEdgeOrigin/Destination`, `directedEdgeToCells`,
+  `originToDirectedEdges`, `directedEdgeToBoundary`,
+  `edgeLengthRads/Km/M`)
+- **Vertices** (`cellToVertex`, `cellToVertexes`, `vertexToLatLng`,
+  `isValidVertex`)
+- **Polygon ↔ cells** (`polygonToCells`, `cellsToMultiPolygon`,
+  `maxPolygonToCellsSize`, with a `LinkedMultiPolygon` RAII wrapper)
+- **Local IJ coordinates** (`cellToLocalIj`, `localIjToCell`)
+- **Grid path** (`gridPathCells`, `gridPathCellsSize`)
+- **Compact / uncompact** (`compactCells`, `uncompactCells`,
+  `uncompactCellsSize`)
+- Icosahedron faces (`getIcosahedronFaces` + `maxFaceCount`)
 - Formatting (h3 ↔ string)
 - Great-circle distances (radians, km, m)
 - Cell area (radians², km², m²) and average hexagon area / edge length
 - Resolution metadata (`getNumCells`, `getRes0Cells`, `getPentagons`,
   `res0CellCount`, `pentagonCount`)
 
-**146 tests pass** across the wrapper layer (25), the pure-Zig
-cross-validation matrix (119), and the adversarial-input fuzz suite (2 —
+**166 tests pass** across the wrapper layer (47), the pure-Zig
+cross-validation matrix (117), and the adversarial-input fuzz suite (2 —
 10 000 random-u64 inputs probed through the pure parser, plus
 NaN/Inf-input rejection). Coverage includes degrees↔radians roundtrip,
 closed-form cell-count and grid-disk-size verification, NYC / SF / Tokyo
@@ -35,12 +50,20 @@ round-trip, parent/children/center-child hierarchy (7² = 49 children at
 resolution-step 2), h3↔string roundtrip, San Francisco → New York City
 great-circle distance (4100–4200 km), res-9 cell area within published
 bounds, all 122 base cells valid at resolution 0, all 12 pentagons valid
-at every resolution, malformed-string rejection, and zero-cell rejection.
+at every resolution, malformed-string rejection, zero-cell rejection,
+directed-edge origin/destination/boundary/length roundtrip on NYC res 9,
+hexagon-vs-pentagon edge/vertex counts (6 vs 5), polygon-to-cells on a
+0.1° × 0.1° bbox at res 7, cells-to-multi-polygon on single cells and
+k=1 disks, local-IJ ↔ cell roundtrip on all k=1 neighbors,
+gridPathCells endpoint/contiguity verification, and compact/uncompact
+roundtrip on a full subtree.
 
-Deferred to v0.2: directed edges, vertices, polygon-to-cells / cells-to-
-multi-polygon, local IJ coordinates, grid path cells, compact / uncompact.
-The raw C bindings are exposed via the `raw` module export so callers can
-use any unwrapped function today and PR an idiomatic wrapper.
+Out of scope (variant grid traversals — the safe / non-pentagon path is
+covered by `gridDisk` / `gridDistance`): `gridDiskUnsafe`,
+`gridDiskDistances`, `gridDiskDistancesSafe`,
+`gridDiskDistancesUnsafe`, `gridDisksUnsafe`, `gridRingUnsafe`. The raw
+C bindings remain exposed via the `raw` module export so callers can
+reach any unwrapped function and PR an idiomatic wrapper.
 
 Minimum Zig version: `0.16.0`.
 
@@ -51,7 +74,7 @@ Add to your `build.zig.zon`:
 ```zig
 .dependencies = .{
     .h3 = .{
-        .url = "https://github.com/SMC17/zig-h3/archive/refs/tags/v0.1.0.tar.gz",
+        .url = "https://github.com/SMC17/zig-h3/archive/refs/tags/v1.1.0.tar.gz",
         .hash = "...",
     },
 },
@@ -145,11 +168,63 @@ pub fn cellToParent(cell: H3Index, parent_res: i32) Error!H3Index;
 pub fn cellToCenterChild(cell: H3Index, child_res: i32) Error!H3Index;
 pub fn cellToChildrenSize(cell: H3Index, child_res: i32) Error!i64;
 pub fn cellToChildren(cell: H3Index, child_res: i32, out: []H3Index) Error!void;
+pub fn cellToChildPos(child: H3Index, parent_res: i32) Error!i64;
+pub fn childPosToCell(child_pos: i64, parent: H3Index, child_res: i32) Error!H3Index;
 
 // Grid traversal
 pub fn maxGridDiskSize(k: i32) Error!i64;
 pub fn gridDisk(origin: H3Index, k: i32, out: []H3Index) Error!void;
 pub fn gridDistance(a: H3Index, b: H3Index) Error!i64;
+pub fn gridPathCellsSize(start: H3Index, end: H3Index) Error!i64;
+pub fn gridPathCells(start: H3Index, end: H3Index, out: []H3Index) Error!void;
+
+// Directed edges
+pub const MAX_DIRECTED_EDGES_PER_CELL: usize = 6;
+pub fn cellsToDirectedEdge(origin: H3Index, destination: H3Index) Error!H3Index;
+pub fn isValidDirectedEdge(edge_idx: H3Index) bool;
+pub fn getDirectedEdgeOrigin(edge_idx: H3Index) Error!H3Index;
+pub fn getDirectedEdgeDestination(edge_idx: H3Index) Error!H3Index;
+pub fn directedEdgeToCells(edge_idx: H3Index) Error![2]H3Index;
+pub fn originToDirectedEdges(origin: H3Index, out: []H3Index) Error!void;
+pub fn directedEdgeToBoundary(edge_idx: H3Index) Error!CellBoundary;
+pub fn edgeLengthRads(edge_idx: H3Index) Error!f64;
+pub fn edgeLengthKm(edge_idx: H3Index) Error!f64;
+pub fn edgeLengthM(edge_idx: H3Index) Error!f64;
+
+// Vertices
+pub const MAX_VERTEXES_PER_CELL: usize = 6;
+pub fn cellToVertex(origin: H3Index, vertex_num: i32) Error!H3Index;
+pub fn cellToVertexes(origin: H3Index, out: []H3Index) Error!void;
+pub fn vertexToLatLng(vertex_idx: H3Index) Error!LatLng;
+pub fn isValidVertex(vertex_idx: H3Index) bool;
+
+// Polygon ↔ cells
+pub const GeoLoop = extern struct { num_verts: c_int, verts: [*]LatLng };
+pub const GeoPolygon = extern struct {
+    geoloop: GeoLoop,
+    num_holes: c_int,
+    holes: ?[*]GeoLoop,
+};
+pub const ContainmentMode = enum(u32) {
+    center, full_overlap, full_containment, overlapping_bbox,
+};
+pub fn maxPolygonToCellsSize(poly: *const GeoPolygon, res: i32, flags: ContainmentMode) Error!i64;
+pub fn polygonToCells(poly: *const GeoPolygon, res: i32, flags: ContainmentMode, out: []H3Index) Error!void;
+pub const LinkedMultiPolygon = struct { /* iterator + count + deinit */ };
+pub fn cellsToMultiPolygon(cells: []const H3Index) Error!LinkedMultiPolygon;
+
+// Local IJ coordinates
+pub const CoordIJ = extern struct { i: c_int, j: c_int };
+pub fn cellToLocalIj(origin: H3Index, cell: H3Index, mode: u32) Error!CoordIJ;
+pub fn localIjToCell(origin: H3Index, ij: CoordIJ, mode: u32) Error!H3Index;
+
+// Compact / uncompact
+pub fn compactCells(cells: []const H3Index, out: []H3Index) Error!void;
+pub fn uncompactCellsSize(cells: []const H3Index, res: i32) Error!i64;
+pub fn uncompactCells(cells: []const H3Index, res: i32, out: []H3Index) Error!void;
+
+// Icosahedron faces
+pub fn getIcosahedronFaces(cell: H3Index, out: []i32) Error!void;
 
 // Formatting
 pub fn h3ToString(cell: H3Index, buf: []u8) Error![]const u8;
@@ -254,10 +329,12 @@ reference.
 zig build test
 ```
 
-146 tests, all currently passing on Zig 0.16.0. The split:
+166 tests, all currently passing on Zig 0.16.0. The split:
 
-- 25 wrapper-layer tests (libh3-backed `h3.*` API)
-- 119 pure-Zig tests including the 142-input cross-validation matrix
+- 47 wrapper-layer tests (libh3-backed `h3.*` API — including the new
+  directed-edge, vertex, polygon, local-IJ, grid-path, and
+  compact/uncompact families introduced in v1.1.0)
+- 117 pure-Zig tests including the 142-input cross-validation matrix
   (libh3 oracle vs `h3.pure.*` / `h3.h3index.*` / `h3.h3decode.*` /
   `h3.grid.*` / `h3.hierarchy.*` / `h3.boundary.*` / `h3.localij.*` /
   `h3.vertex.*` / `h3.edge.*` / `h3.polygon.*` paths)
