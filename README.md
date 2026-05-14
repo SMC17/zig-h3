@@ -1,5 +1,7 @@
 # zig-h3
 
+[![CI](https://github.com/SMC17/zig-h3/actions/workflows/ci.yml/badge.svg)](https://github.com/SMC17/zig-h3/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/SMC17/zig-h3?display_name=tag&sort=semver)](https://github.com/SMC17/zig-h3/releases) [![License](https://img.shields.io/github/license/SMC17/zig-h3)](LICENSE)
+
 Idiomatic Zig bindings for [H3 v4][h3-site] — Uber's hexagonal hierarchical
 spatial index. Wraps the official `libh3` C library (v4.1.0), vendored
 transparently via Zig's package manager. Build it from source the first
