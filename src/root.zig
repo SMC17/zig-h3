@@ -8,14 +8,18 @@
 //!
 //! ## Status
 //!
-//! v0.1.0 covers ~30 of the ~70 H3 v4 public functions: lat/lng ↔ cell
+//! v1.1.0 covers 63 of the ~70 H3 v4 public functions: lat/lng ↔ cell
 //! conversions, cell boundary geometry, resolution / base cell / pentagon
-//! inspection, hierarchical traversal (parent / children / center child),
-//! grid disk traversal, grid distance, formatting (h3 ↔ string), great-
-//! circle distances, cell area and edge-length helpers, and base-set
-//! enumeration. Directed-edge, vertex, polygon-to-cells, and local-IJ
-//! coordinate APIs are deferred to v0.2 — the underlying C functions are
-//! available via `c.*` for callers who need them now.
+//! inspection, hierarchical traversal (parent / children / center child /
+//! child-position), grid disk traversal, grid distance, grid path,
+//! directed edges (origin/destination/boundary/length), vertices,
+//! polygon ↔ cells, local-IJ coordinates, compact / uncompact,
+//! icosahedron faces, formatting (h3 ↔ string), great-circle distances,
+//! cell area and edge-length helpers, and base-set enumeration. The
+//! remaining unwrapped functions are variant grid traversals
+//! (`gridDiskUnsafe`, `gridDiskDistances*`, `gridRingUnsafe`,
+//! `gridDisksUnsafe`); the underlying C functions are available via
+//! `raw.*` for callers who need them now.
 
 const std = @import("std");
 const c = @cImport({
