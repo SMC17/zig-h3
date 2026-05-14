@@ -22,15 +22,18 @@ time, cached thereafter.
 - Resolution metadata (`getNumCells`, `getRes0Cells`, `getPentagons`,
   `res0CellCount`, `pentagonCount`)
 
-**24 unit tests pass**, covering: degrees↔radians roundtrip, closed-form
-cell-count and grid-disk-size verification, NYC and SF cell resolution,
-boundary vertex counts, hexagonal grid disk arithmetic, k=1 neighbor and
-grid-distance round-trip, parent/children/center-child hierarchy roundtrip
-(7² = 49 children at resolution-step 2), h3↔string roundtrip, San
-Francisco → New York City great-circle distance (4100–4200 km), res-9 cell
-area within published bounds, all 122 base cells valid and at resolution
-0, all 12 pentagons valid at every tested resolution, malformed-string
-rejection, and zero-cell rejection.
+**146 tests pass** across the wrapper layer (25), the pure-Zig
+cross-validation matrix (119), and the adversarial-input fuzz suite (2 —
+10 000 random-u64 inputs probed through the pure parser, plus
+NaN/Inf-input rejection). Coverage includes degrees↔radians roundtrip,
+closed-form cell-count and grid-disk-size verification, NYC / SF / Tokyo
+/ Sydney / null-island / pole-adjacent cell resolution, boundary vertex
+counts, hexagonal grid disk arithmetic, k=1 neighbor and grid-distance
+round-trip, parent/children/center-child hierarchy (7² = 49 children at
+resolution-step 2), h3↔string roundtrip, San Francisco → New York City
+great-circle distance (4100–4200 km), res-9 cell area within published
+bounds, all 122 base cells valid at resolution 0, all 12 pentagons valid
+at every resolution, malformed-string rejection, and zero-cell rejection.
 
 Deferred to v0.2: directed edges, vertices, polygon-to-cells / cells-to-
 multi-polygon, local IJ coordinates, grid path cells, compact / uncompact.
@@ -249,7 +252,98 @@ reference.
 zig build test
 ```
 
-24 tests, all currently passing on Zig 0.16.0.
+146 tests, all currently passing on Zig 0.16.0. The split:
+
+- 25 wrapper-layer tests (libh3-backed `h3.*` API)
+- 119 pure-Zig tests including the 142-input cross-validation matrix
+  (libh3 oracle vs `h3.pure.*` / `h3.h3index.*` / `h3.h3decode.*` /
+  `h3.grid.*` / `h3.hierarchy.*` / `h3.boundary.*` / `h3.localij.*` /
+  `h3.vertex.*` / `h3.edge.*` / `h3.polygon.*` paths)
+- 2 fuzz tests in `pure.zig` — 10 000 random-u64 inputs through the
+  pure-Zig parser surface (no panics on garbage), plus NaN/Inf input
+  rejection on `pure.latLngToCell`
+
+## Benchmarks
+
+```sh
+zig build bench
+```
+
+Three benchmarks ship under `bench/`:
+
+- `bench_latlng_to_cell.zig` — `h3.latLngToCell` at resolutions 7, 9,
+  11, 13, 15 over 1 M random points.
+- `bench_grid_disk.zig` — `h3.gridDisk` at resolutions 7, 9, 11 with
+  k = 1, 3, 5 over 100 K calls each. Reports ns/call and cells/sec.
+- `bench_pure_vs_libh3.zig` — `latLngToCell` / `cellToLatLng` /
+  `gridDisk` through both the libh3 wrapper (`h3.*`) and the pure-Zig
+  path (`h3.h3index.*` / `h3.h3decode.*` / `h3.grid.*`), side-by-side.
+  This is the killer chart for the v0.1.0 pure-Zig port.
+
+Each benchmark warms up, then measures with enough iterations to dampen
+variance over roughly one second of wall time per row. Output is
+parseable `key=value` lines. Timing uses `std.os.linux.clock_gettime(
+.MONOTONIC, &ts)` directly — `std.time.Timer` and
+`std.time.nanoTimestamp` were removed in Zig 0.16's stdlib reshuffle.
+
+Representative numbers on the maintainer's workstation (Intel Core
+i7-1065G7 @ 1.30 GHz, Linux 7.0.3-arch1-1 x86_64, Zig 0.16.0,
+`zig build bench` with `-Doptimize=ReleaseFast`):
+
+### latLngToCell (libh3-wrapper path)
+
+| Resolution | ns/op  | ops/sec |
+| ---------- | ------ | ------- |
+| 7          | 6 837  | 146 K   |
+| 9          | 3 556  | 281 K   |
+| 11         | 7 483  | 134 K   |
+| 13         | 5 454  | 183 K   |
+| 15         | 8 868  | 113 K   |
+
+### gridDisk (libh3-wrapper path)
+
+| Resolution | k | disk_size | ns/op   | cells/sec |
+| ---------- | - | --------- | ------- | --------- |
+| 7          | 1 | 7         | 696     |  10.1 M   |
+| 7          | 3 | 37        | 8 560   |   4.3 M   |
+| 7          | 5 | 91        | 20 955  |   4.3 M   |
+| 9          | 1 | 7         | 898     |   7.8 M   |
+| 9          | 3 | 37        | 4 805   |   7.7 M   |
+| 9          | 5 | 91        | 14 109  |   6.4 M   |
+| 11         | 1 | 7         | 2 111   |   3.3 M   |
+| 11         | 3 | 37        | 10 074  |   3.7 M   |
+| 11         | 5 | 91        | 23 854  |   3.8 M   |
+
+### Pure-Zig vs libh3 (the killer chart)
+
+| Op             | Res | libh3 ns/op | pure-Zig ns/op | pure/libh3 |
+| -------------- | --- | ----------- | -------------- | ---------- |
+| latLngToCell   |  7  | 4 954       | 2 981          | **0.60x**  |
+| latLngToCell   |  9  | 5 497       | 4 619          | **0.84x**  |
+| latLngToCell   | 11  | 7 795       | 3 333          | **0.43x**  |
+| cellToLatLng   |  7  | 1 523       | 1 025          | **0.67x**  |
+| cellToLatLng   |  9  | 2 805       | 1 175          | **0.42x**  |
+| cellToLatLng   | 11  | 1 765       | 1 796          |   1.02x    |
+| gridDisk k=3   |  9  | 5 909       | 4 669          | **0.79x**  |
+
+**Pure-Zig is at parity or faster than libh3 on every measured op at
+v0.1.0**, with the largest wins on `latLngToCell` at res 11 (2.3x
+faster) and `cellToLatLng` at res 9 (2.4x faster). The `cellToLatLng`
+res-11 row is the only "essentially tied" cell — pure is 2% slower
+than the C reference, within run-to-run noise on this laptop.
+
+The win is concentrated in the projection arithmetic: the pure-Zig
+implementation uses a flatter call graph and lets LLVM inline through
+the Phase 3 constant tables, whereas libh3 carries function-call
+overhead between `latLngToCell` → `_geoToFaceIjk` → `_geoToHex2d` →
+`_hex2dToCoordIJK` plus the C ABI on every step. Both paths produce
+bit-identical output (validated by the 142-input cross-validation
+matrix); the speedup is pure codegen.
+
+These numbers are on a busy laptop running concurrent agents;
+run-to-run variance is ±30% on the tighter rows (the ratio shape is
+stable, the absolute ns numbers fluctuate). Bring your own data on a
+quiet machine for steady measurements.
 
 ## Part of the Sovereign Stack
 

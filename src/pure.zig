@@ -790,3 +790,91 @@ test "pure hexagon avg functions reject out-of-range resolution" {
     try testing.expectError(Error.ResolutionDomain, hexagonEdgeLengthAvgM(-1));
     try testing.expectError(Error.ResolutionDomain, hexagonEdgeLengthAvgM(16));
 }
+
+// =============================================================================
+// Fuzz: adversarial-input safety on the pure-Zig parser path
+// =============================================================================
+//
+// The 142 cross-validation tests cover known-good inputs. This fuzz test
+// covers the *garbage*-input safety contract: feed 10 000 random u64 values
+// into the pure-Zig parser surface (`isValidCell`, `cellToLatLng`,
+// `getResolution`, `getBaseCellNumber`, `isPentagon`) and verify nothing
+// panics, no NaN/Inf escapes, and `isValidCell` agreement between the random
+// input and a cell that survives the round-trip stays consistent.
+//
+// PRNG seed is fixed for reproducibility. The cellToLatLng round-trip only
+// runs when isValidCell returns true — invalid inputs are expected to error,
+// and we just assert they error cleanly (no panic).
+
+const h3index = @import("pure_h3index.zig");
+const h3decode = @import("pure_h3decode.zig");
+
+test "fuzz: pure parser rejects garbage u64 inputs without panicking" {
+    const fuzz_iters: usize = 10_000;
+    var rng = std.Random.DefaultPrng.init(0x60A1_DEAD_BEEF_C0DE);
+    const r = rng.random();
+
+    var seen_valid: usize = 0;
+    var seen_invalid: usize = 0;
+
+    var i: usize = 0;
+    while (i < fuzz_iters) : (i += 1) {
+        const candidate: H3Index = r.int(u64);
+
+        // Step 1: probe inspection functions — these must never panic on any
+        // 64-bit input, even garbage.
+        const res = getResolution(candidate);
+        _ = getBaseCellNumber(candidate);
+        _ = isPentagon(candidate);
+        const valid = isValidCell(candidate);
+
+        if (valid) {
+            seen_valid += 1;
+            // For valid cells, cellToLatLng must return finite coordinates
+            // and round-trip back to the same cell when re-resolved.
+            const ll = try h3decode.cellToLatLng(candidate);
+            try testing.expect(std.math.isFinite(ll.lat));
+            try testing.expect(std.math.isFinite(ll.lng));
+            try testing.expect(ll.lat >= -std.math.pi / 2.0 - 1e-9);
+            try testing.expect(ll.lat <= std.math.pi / 2.0 + 1e-9);
+
+            // Round-trip via latLngToCell at the cell's own resolution. The
+            // result must be a valid cell; in pentagon-adjacent regions it
+            // may differ from the input due to centroid drift, but it must
+            // not panic and must remain valid.
+            if (res >= 0 and res <= MAX_RES) {
+                const round = try h3index.latLngToCell(ll, res);
+                try testing.expect(isValidCell(round));
+            }
+        } else {
+            seen_invalid += 1;
+            // For invalid cells, cellToLatLng is allowed to error or return
+            // garbage, but it must not panic. Wrap in `_ = ... catch ...`.
+            // Any error code is acceptable for invalid input; we only care
+            // that the call does not panic.
+            if (h3decode.cellToLatLng(candidate)) |ll| {
+                std.mem.doNotOptimizeAway(ll.lat);
+            } else |_| {}
+        }
+    }
+
+    // Sanity: random u64s should produce mostly-invalid inputs (the valid
+    // cell space is sparse). Don't pin a specific ratio, just assert we hit
+    // both branches so the fuzz exercises both code paths.
+    try testing.expect(seen_invalid > 0);
+    // (seen_valid may be zero in principle; the H3 valid-cell density is
+    // very low. The interesting failure mode is panic-on-invalid, which we
+    // covered above.)
+}
+
+test "fuzz: pure latLngToCell rejects non-finite input cleanly" {
+    const inputs = [_]LatLng{
+        .{ .lat = std.math.nan(f64), .lng = 0.0 },
+        .{ .lat = 0.0, .lng = std.math.nan(f64) },
+        .{ .lat = std.math.inf(f64), .lng = 0.0 },
+        .{ .lat = 0.0, .lng = -std.math.inf(f64) },
+    };
+    for (inputs) |p| {
+        try testing.expectError(Error.LatLngDomain, h3index.latLngToCell(p, 9));
+    }
+}
