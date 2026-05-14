@@ -17,45 +17,7 @@ pub fn build(b: *std.Build) void {
     });
 
     // Compile libh3 v4.1.0 as a static library.
-    const libh3_mod = b.createModule(.{
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    libh3_mod.addConfigHeader(h3api_h);
-    libh3_mod.addIncludePath(h3c.path("src/h3lib/include"));
-    libh3_mod.addCSourceFiles(.{
-        .root = h3c.path("."),
-        .files = &.{
-            "src/h3lib/lib/algos.c",
-            "src/h3lib/lib/baseCells.c",
-            "src/h3lib/lib/bbox.c",
-            "src/h3lib/lib/coordijk.c",
-            "src/h3lib/lib/directedEdge.c",
-            "src/h3lib/lib/faceijk.c",
-            "src/h3lib/lib/h3Assert.c",
-            "src/h3lib/lib/h3Index.c",
-            "src/h3lib/lib/iterators.c",
-            "src/h3lib/lib/latLng.c",
-            "src/h3lib/lib/linkedGeo.c",
-            "src/h3lib/lib/localij.c",
-            "src/h3lib/lib/mathExtensions.c",
-            "src/h3lib/lib/polygon.c",
-            "src/h3lib/lib/vec2d.c",
-            "src/h3lib/lib/vec3d.c",
-            "src/h3lib/lib/vertex.c",
-            "src/h3lib/lib/vertexGraph.c",
-        },
-        .flags = &.{
-            "-std=c99",
-            "-Wno-deprecated-declarations",
-        },
-    });
-    const libh3 = b.addLibrary(.{
-        .name = "h3",
-        .linkage = .static,
-        .root_module = libh3_mod,
-    });
+    const libh3 = buildLibH3(b, h3c, h3api_h, target, optimize);
 
     // Zig wrapper module: idiomatic API on top of libh3.
     const mod = b.addModule("h3", .{
@@ -102,4 +64,103 @@ pub fn build(b: *std.Build) void {
     const run_example = b.addRunArtifact(example_exe);
     const example_step = b.step("example-nyc-neighbors", "Run the NYC k=1 neighbors example");
     example_step.dependOn(&run_example.step);
+
+    // Benchmarks — separate step (`zig build bench`) so `zig build test`
+    // stays fast. Always built in ReleaseFast so numbers reflect optimised
+    // codegen regardless of the user's top-level optimize flag. The bench
+    // gets its own ReleaseFast libh3 + h3 module instance because mixing
+    // Debug libh3 (default top-level optimize) and ReleaseFast bench code
+    // leaves ld.lld with unresolved `__ubsan_handle_*` symbols.
+    const bench_optimize: std.builtin.OptimizeMode = .ReleaseFast;
+    const bench_libh3 = buildLibH3(b, h3c, h3api_h, target, bench_optimize);
+    const bench_h3_mod = b.addModule("h3-bench", .{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = bench_optimize,
+        .link_libc = true,
+    });
+    bench_h3_mod.addConfigHeader(h3api_h);
+    bench_h3_mod.addIncludePath(h3c.path("src/h3lib/include"));
+    bench_h3_mod.linkLibrary(bench_libh3);
+
+    const bench_step = b.step("bench", "Run latLngToCell / gridDisk / pure-vs-libh3 throughput benchmarks");
+    const bench_sources = [_]struct {
+        name: []const u8,
+        path: []const u8,
+    }{
+        .{ .name = "bench-latlng-to-cell", .path = "bench/bench_latlng_to_cell.zig" },
+        .{ .name = "bench-grid-disk", .path = "bench/bench_grid_disk.zig" },
+        .{ .name = "bench-pure-vs-libh3", .path = "bench/bench_pure_vs_libh3.zig" },
+    };
+    for (bench_sources) |bs| {
+        const bench_mod = b.createModule(.{
+            .root_source_file = b.path(bs.path),
+            .target = target,
+            .optimize = bench_optimize,
+            .link_libc = true,
+        });
+        bench_mod.addConfigHeader(h3api_h);
+        bench_mod.addIncludePath(h3c.path("src/h3lib/include"));
+        bench_mod.linkLibrary(bench_libh3);
+        bench_mod.addImport("h3", bench_h3_mod);
+        const bench_exe = b.addExecutable(.{
+            .name = bs.name,
+            .root_module = bench_mod,
+            // Same linker pin as `tests` — self-hosted hits R_X86_64_PC64
+            // relocation issues with the libh3 + pure-Zig table size.
+            .use_llvm = true,
+            .use_lld = true,
+        });
+        const run_bench = b.addRunArtifact(bench_exe);
+        run_bench.has_side_effects = true; // ensure rerun on `zig build bench`
+        bench_step.dependOn(&run_bench.step);
+    }
+}
+
+fn buildLibH3(
+    b: *std.Build,
+    h3c: *std.Build.Dependency,
+    h3api_h: *std.Build.Step.ConfigHeader,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+) *std.Build.Step.Compile {
+    const libh3_mod = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    libh3_mod.addConfigHeader(h3api_h);
+    libh3_mod.addIncludePath(h3c.path("src/h3lib/include"));
+    libh3_mod.addCSourceFiles(.{
+        .root = h3c.path("."),
+        .files = &.{
+            "src/h3lib/lib/algos.c",
+            "src/h3lib/lib/baseCells.c",
+            "src/h3lib/lib/bbox.c",
+            "src/h3lib/lib/coordijk.c",
+            "src/h3lib/lib/directedEdge.c",
+            "src/h3lib/lib/faceijk.c",
+            "src/h3lib/lib/h3Assert.c",
+            "src/h3lib/lib/h3Index.c",
+            "src/h3lib/lib/iterators.c",
+            "src/h3lib/lib/latLng.c",
+            "src/h3lib/lib/linkedGeo.c",
+            "src/h3lib/lib/localij.c",
+            "src/h3lib/lib/mathExtensions.c",
+            "src/h3lib/lib/polygon.c",
+            "src/h3lib/lib/vec2d.c",
+            "src/h3lib/lib/vec3d.c",
+            "src/h3lib/lib/vertex.c",
+            "src/h3lib/lib/vertexGraph.c",
+        },
+        .flags = &.{
+            "-std=c99",
+            "-Wno-deprecated-declarations",
+        },
+    });
+    return b.addLibrary(.{
+        .name = "h3",
+        .linkage = .static,
+        .root_module = libh3_mod,
+    });
 }
