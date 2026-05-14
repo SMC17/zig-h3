@@ -516,6 +516,37 @@ pub fn edgeLengthM(edge_idx: H3Index) Error!f64 {
     return out;
 }
 
+// === Vertices ==================================================================
+
+/// Maximum number of vertices per cell (6 for hexagons, 5 for pentagons).
+pub const MAX_VERTEXES_PER_CELL: usize = 6;
+
+/// H3 vertex index for `vertex_num` (0–5 hex / 0–4 pentagon) of `origin`.
+pub fn cellToVertex(origin: H3Index, vertex_num: i32) Error!H3Index {
+    var out: c.H3Index = 0;
+    try check(c.cellToVertex(origin, vertex_num, &out));
+    return out;
+}
+
+/// Fill `out` with all vertex indices of `origin`. `out.len` must be at least
+/// `MAX_VERTEXES_PER_CELL` (6); pentagons leave the trailing slot as `H3_NULL`.
+pub fn cellToVertexes(origin: H3Index, out: []H3Index) Error!void {
+    if (out.len < MAX_VERTEXES_PER_CELL) return Error.MemoryBounds;
+    try check(c.cellToVertexes(origin, out.ptr));
+}
+
+/// Lat/lng of a single H3 vertex index.
+pub fn vertexToLatLng(vertex_idx: H3Index) Error!LatLng {
+    var out: c.LatLng = undefined;
+    try check(c.vertexToLatLng(vertex_idx, &out));
+    return .{ .lat = out.lat, .lng = out.lng };
+}
+
+/// True iff `vertex_idx` is a syntactically valid H3 vertex index.
+pub fn isValidVertex(vertex_idx: H3Index) bool {
+    return c.isValidVertex(vertex_idx) != 0;
+}
+
 // ===========================================================================
 // Tests
 // ===========================================================================
@@ -824,4 +855,58 @@ test "edgeLengthKm at res 9 is roughly hexagonEdgeLengthAvgKm" {
         return;
     }
     return error.NoNeighborFound;
+}
+
+// === Vertex tests ==============================================================
+
+test "cellToVertex: 6 vertices for a hexagon round-trip through vertexToLatLng" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    var v_idx: i32 = 0;
+    while (v_idx < 6) : (v_idx += 1) {
+        const vert = try cellToVertex(cell, v_idx);
+        try testing.expect(isValidVertex(vert));
+        const ll = try vertexToLatLng(vert);
+        // The vertex should lie within ~1° of the cell's centroid at res 9
+        // (res-9 cells are ~470 m across — easily within 0.01°).
+        const center = try cellToLatLng(cell);
+        try testing.expect(@abs(ll.lat - center.lat) < 0.01);
+        try testing.expect(@abs(ll.lng - center.lng) < 0.01);
+    }
+}
+
+test "cellToVertex rejects out-of-range vertex_num" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    try testing.expectError(Error.Domain, cellToVertex(cell, -1));
+    try testing.expectError(Error.Domain, cellToVertex(cell, 6));
+}
+
+test "cellToVertexes fills 6 valid hex vertices, 5 for pentagons" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    var verts: [MAX_VERTEXES_PER_CELL]H3Index = .{0} ** MAX_VERTEXES_PER_CELL;
+    try cellToVertexes(cell, &verts);
+    var valid: usize = 0;
+    for (verts) |v| {
+        if (v == H3_NULL) continue;
+        try testing.expect(isValidVertex(v));
+        valid += 1;
+    }
+    try testing.expectEqual(@as(usize, 6), valid);
+
+    var pents: [12]H3Index = undefined;
+    try getPentagons(3, &pents);
+    var pverts: [MAX_VERTEXES_PER_CELL]H3Index = .{0} ** MAX_VERTEXES_PER_CELL;
+    try cellToVertexes(pents[0], &pverts);
+    valid = 0;
+    for (pverts) |v| {
+        if (v == H3_NULL) continue;
+        try testing.expect(isValidVertex(v));
+        valid += 1;
+    }
+    try testing.expectEqual(@as(usize, 5), valid);
+}
+
+test "isValidVertex rejects a cell" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    try testing.expect(!isValidVertex(cell));
+    try testing.expect(!isValidVertex(0));
 }
