@@ -682,6 +682,22 @@ pub fn localIjToCell(origin: H3Index, ij: CoordIJ, mode: u32) Error!H3Index {
     return out;
 }
 
+// === Grid path ================================================================
+
+/// Number of cells in the line connecting `start` and `end` (inclusive of both
+/// endpoints). Returns `gridDistance + 1` on success.
+pub fn gridPathCellsSize(start: H3Index, end: H3Index) Error!i64 {
+    var out: i64 = 0;
+    try check(c.gridPathCellsSize(start, end, &out));
+    return out;
+}
+
+/// Fill `out` with the line of cells from `start` to `end` (inclusive).
+/// `out.len` must be at least `gridPathCellsSize(start, end)`.
+pub fn gridPathCells(start: H3Index, end: H3Index, out: []H3Index) Error!void {
+    try check(c.gridPathCells(start, end, out.ptr));
+}
+
 // ===========================================================================
 // Tests
 // ===========================================================================
@@ -1115,4 +1131,36 @@ test "cellToLocalIj: k=1 neighbors all round-trip" {
         const ij = try cellToLocalIj(origin, cell, 0);
         try testing.expectEqual(cell, try localIjToCell(origin, ij, 0));
     }
+}
+
+// === Grid path tests ===========================================================
+
+test "gridPathCellsSize equals gridDistance + 1" {
+    const origin = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    var ring: [7]H3Index = .{0} ** 7;
+    try gridDisk(origin, 1, &ring);
+    for (ring) |dest| {
+        if (dest == H3_NULL or dest == origin) continue;
+        const dist = try gridDistance(origin, dest);
+        try testing.expectEqual(dist + 1, try gridPathCellsSize(origin, dest));
+        return;
+    }
+    return error.NoNeighborFound;
+}
+
+test "gridPathCells: short path includes endpoints and is contiguous" {
+    const origin = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    var ring: [7]H3Index = .{0} ** 7;
+    try gridDisk(origin, 1, &ring);
+    for (ring) |dest| {
+        if (dest == H3_NULL or dest == origin) continue;
+        const size = try gridPathCellsSize(origin, dest);
+        const path = try testing.allocator.alloc(H3Index, @intCast(size));
+        defer testing.allocator.free(path);
+        try gridPathCells(origin, dest, path);
+        try testing.expectEqual(origin, path[0]);
+        try testing.expectEqual(dest, path[path.len - 1]);
+        return;
+    }
+    return error.NoNeighborFound;
 }
