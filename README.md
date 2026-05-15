@@ -67,6 +67,15 @@ reach any unwrapped function and PR an idiomatic wrapper.
 
 Minimum Zig version: `0.16.0`.
 
+CI covers Linux x86_64, Linux aarch64, and macOS arm64 (native runners),
+plus a cross-compile sanity job for `aarch64-linux-gnu` and
+`x86_64-linux-gnu`. The vendored libh3 C source compiles cleanly on all
+three native runners. macOS-target cross-compile from a Linux host hits
+a Zig LLD-on-mach-o linking limitation in the example executable; the
+native `macos-14` runner covers macOS arm64 with the system linker, so
+the coverage gap is in the *cross-compile path from Linux to macOS*, not
+in the macOS target itself.
+
 ## Install
 
 Add to your `build.zig.zon`:

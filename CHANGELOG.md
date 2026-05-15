@@ -1,3 +1,28 @@
+## Unreleased
+
+### Added
+- **Documentation tests.** New `zig build doctest` step (and underlying
+  `tools/doctest.sh`) verifies the README's executable claims:
+  - The README Quickstart Zig code block is diffed against
+    `examples/quickstart.zig` (vendored verbatim from the README); any
+    drift between docs and code FAILS the doc-test.
+  - The compiled `example-quickstart` binary is executed and its stdout
+    is regex-checked against the documented output shape (`cell:` +
+    h3-hex, `resolution: 9`, `base cell: N`, `pentagon: false`,
+    `ring[N]: distance 1`).
+  - The README's documented build steps (`zig build test`,
+    `zig build bench`) are confirmed to exist as real build graph nodes.
+- New `examples/quickstart.zig` (vendored from README) wired as
+  `zig build example-quickstart`.
+- 8 doc-test checks, all passing on first run — README and code agreed.
+
+### Why
+Stale README examples are a common OSS failure mode: the library
+evolves, the README doesn't, and new users hit confusing build errors
+on the first thing they try. The doc-test makes the README a
+load-bearing artifact that CI can gate on, so README drift becomes a
+build failure rather than a silent regression.
+
 ## v1.1.0 — 2026-05-13
 
 **Full H3 v4 grid/edge/vertex/polygon/IJ/compact/path API coverage.**
