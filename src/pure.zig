@@ -605,6 +605,43 @@ test "pure isValidCell rejects pentagon with K_AXES_DIGIT first non-zero digit" 
     try testing.expectEqual(root.isValidCell(poisoned), isValidCell(poisoned));
 }
 
+test "pure isValidCell rejects out-of-range base cell numbers (122..127)" {
+    // The base-cell field is 7 bits wide (0..127) but only base cells
+    // 0..121 are valid (RES0_CELL_COUNT = 122). Take a valid res-0 cell
+    // and overwrite its base-cell field with 122..127; libh3 rejects all
+    // of these, and so must we. Surfaced by mutation operator M07
+    // (`bc >= RES0_CELL_COUNT` → `bc > RES0_CELL_COUNT`).
+    const seed_cell = try root.latLngToCell(LatLng.fromDegrees(40.0, -74.0), 0);
+    try testing.expect(isValidCell(seed_cell));
+    const bc_mask = @as(H3Index, 0x7F) << H3_BC_OFFSET;
+
+    var bad_bc: i32 = RES0_CELL_COUNT;
+    while (bad_bc < 128) : (bad_bc += 1) {
+        const poisoned = (seed_cell & ~bc_mask) |
+            (@as(H3Index, @intCast(bad_bc)) << H3_BC_OFFSET);
+        try testing.expect(!isValidCell(poisoned));
+        try testing.expectEqual(root.isValidCell(poisoned), isValidCell(poisoned));
+    }
+}
+
+test "pure isValidCell rejects cell with INVALID_DIGIT sentinel at in-resolution slot" {
+    // The digit-range guard in isValidCell rejects any digit equal to
+    // INVALID_DIGIT (7) at slots r in 1..res. The `getCellDigit` return
+    // type is `u3`, so the guard must use `>=` not `>` — `digit > 7` is
+    // unreachable. Surfaced by mutation operator M08 (`digit >= INVALID_DIGIT`
+    // → `digit > INVALID_DIGIT`).
+    const cell = try root.latLngToCell(LatLng.fromDegrees(40.0, -74.0), 5);
+    try testing.expect(isValidCell(cell));
+
+    // Poison the digit at resolution 3 (an in-resolution slot for a res-5
+    // cell, i.e., r ≤ res) to INVALID_DIGIT.
+    const shift: u6 = @intCast((@as(i32, MAX_RES) - 3) * @as(i32, H3_PER_DIGIT_OFFSET));
+    const mask = @as(H3Index, 0x7) << shift;
+    const poisoned = (cell & ~mask) | (@as(H3Index, INVALID_DIGIT) << shift);
+    try testing.expect(!isValidCell(poisoned));
+    try testing.expectEqual(root.isValidCell(poisoned), isValidCell(poisoned));
+}
+
 test "pure h3ToString matches libh3 byte-for-byte" {
     var rng = std.Random.DefaultPrng.init(0xF00DBA12);
     var our_buf: [17]u8 = undefined;

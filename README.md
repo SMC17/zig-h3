@@ -11,8 +11,9 @@ time, cached thereafter.
 
 ## Status
 
-`v1.2.1` — covers **all 70 H3 v4 public functions** (verified by
-`zig build coverage`), spanning the full
+`v1.3.0` — covers **all 70 H3 v4 public functions** (verified by
+`tools/coverage-check.sh`, the public-symbol regression guard),
+spanning the full
 grid / edge / vertex / polygon / IJ / compact / path API:
 
 - Lat/lng ↔ cell conversions
@@ -43,10 +44,14 @@ grid / edge / vertex / polygon / IJ / compact / path API:
 - Resolution metadata (`getNumCells`, `getRes0Cells`, `getPentagons`,
   `res0CellCount`, `pentagonCount`)
 
-**172 tests pass** across the wrapper layer (53), the pure-Zig
-cross-validation matrix (117), and the adversarial-input fuzz suite (2 —
-10 000 random-u64 inputs probed through the pure parser, plus
-NaN/Inf-input rejection). Coverage includes degrees↔radians roundtrip,
+**190 tests pass** across the wrapper layer, the pure-Zig
+cross-validation matrix, the adversarial-input fuzz suite
+(10 000 random-u64 inputs probed through the pure parser, plus
+NaN/Inf-input rejection), the 10k-trial property-based H3-invariant
+harness, the 2000-trial polygon round-trip property test, the
+16-operator mutation-testing harness (M07/M08 isValidCell + M15
+pointInsideGeoLoop boundary gaps closed), and the exhaustive
+resolution-sweep matrix across all 16 H3 v4 resolutions. Coverage includes degrees↔radians roundtrip,
 closed-form cell-count and grid-disk-size verification, NYC / SF / Tokyo
 / Sydney / null-island / pole-adjacent cell resolution, boundary vertex
 counts, hexagonal grid disk arithmetic, k=1 neighbor and grid-distance

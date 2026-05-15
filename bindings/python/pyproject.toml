@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "zig_h3"
+version = "0.1.0"
+description = "Python binding scaffold for SMC17/zig-h3 (the Zig wrapper of libh3). Differential-testing client; production users should prefer h3-py."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [{ name = "Sean Collins" }]
+
+[tool.hatch.build.targets.wheel]
+packages = ["zig_h3"]
