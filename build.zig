@@ -11,7 +11,13 @@ pub fn build(b: *std.Build) void {
     // not apply on macOS, where the system ld64 path works out of the box.
     // So: pin LLD everywhere EXCEPT macOS, where we let Zig default.
     const target_os = target.result.os.tag;
-    const pin_lld: ?bool = if (target_os == .macos) null else true;
+    // macOS: force `use_lld = false` because Zig 0.16's LLD rejects mach-o
+    //        outright ("using LLD to link macho files is unsupported"). The
+    //        default-null path triggers the same rejection on executable
+    //        installs, so we have to be explicit.
+    // Other: pin LLD true to dodge the R_X86_64_PC64 relocation bug in the
+    //        non-LLD path on Linux.
+    const pin_lld: ?bool = if (target_os == .macos) false else true;
     const pin_llvm: ?bool = if (target_os == .macos) null else true;
 
     const h3c = b.dependency("h3c", .{});
