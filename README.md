@@ -360,6 +360,11 @@ zig build test
 
 ## Benchmarks
 
+**Headline result**: the pure-Zig port is **0.71–0.88× of libh3** (12–29%
+faster) on every measured geo-conversion and `gridDisk(k=3)` call on
+i7-1065G7. Full numbers + reproduction recipe + caveats in
+**[BENCH.md](BENCH.md)**.
+
 ```sh
 zig build bench
 ```

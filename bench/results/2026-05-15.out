@@ -1,0 +1,29 @@
+# zig-h3 bench results — 2026-05-15
+# host: Linux 7.0.3-arch1-1 x86_64
+# cpu: Intel(R) Core(TM) i7-1065G7 CPU @ 1.30GHz
+# zig: 0.16.0
+
+# zig-h3 bench: pure-Zig vs libh3 (ReleaseFast, MONOTONIC ns)
+bench=latLngToCell.cmp res7 libh3_ns_per_op=1068 pure_ns_per_op=761 pure_over_libh3_x1000=712 iters=200000 libh3_total_ns=213727207 pure_total_ns=152203210
+bench=cellToLatLng.cmp res7 libh3_ns_per_op=562 pure_ns_per_op=398 pure_over_libh3_x1000=708 iters=200000 libh3_total_ns=112528978 pure_total_ns=79771612
+bench=latLngToCell.cmp res9 libh3_ns_per_op=1253 pure_ns_per_op=901 pure_over_libh3_x1000=719 iters=200000 libh3_total_ns=250692542 pure_total_ns=180397466
+bench=cellToLatLng.cmp res9 libh3_ns_per_op=519 pure_ns_per_op=399 pure_over_libh3_x1000=769 iters=200000 libh3_total_ns=103851931 pure_total_ns=79963446
+bench=latLngToCell.cmp res11 libh3_ns_per_op=1328 pure_ns_per_op=981 pure_over_libh3_x1000=739 iters=200000 libh3_total_ns=265709600 pure_total_ns=196376979
+bench=cellToLatLng.cmp res11 libh3_ns_per_op=649 pure_ns_per_op=503 pure_over_libh3_x1000=776 iters=200000 libh3_total_ns=129800605 pure_total_ns=100727045
+bench=gridDisk.cmp res9_k3 libh3_ns_per_op=1190 pure_ns_per_op=1052 pure_over_libh3_x1000=884 iters=50000 libh3_total_ns=59547701 pure_total_ns=52642216
+# zig-h3 bench: gridDisk (ReleaseFast, MONOTONIC ns)
+bench=gridDisk res=7 k=1 disk_size=7 op=GRID_DISK iters=100000 total_ns=20128543 ns_per_op=201 ops_per_sec=4968069 cells_per_sec=34776486
+bench=gridDisk res=7 k=3 disk_size=37 op=GRID_DISK iters=100000 total_ns=113436650 ns_per_op=1134 ops_per_sec=881549 cells_per_sec=32617324
+bench=gridDisk res=7 k=5 disk_size=91 op=GRID_DISK iters=100000 total_ns=280846965 ns_per_op=2808 ops_per_sec=356065 cells_per_sec=32401988
+bench=gridDisk res=9 k=1 disk_size=7 op=GRID_DISK iters=100000 total_ns=18404916 ns_per_op=184 ops_per_sec=5433330 cells_per_sec=38033316
+bench=gridDisk res=9 k=3 disk_size=37 op=GRID_DISK iters=100000 total_ns=101729648 ns_per_op=1017 ops_per_sec=982997 cells_per_sec=36370911
+bench=gridDisk res=9 k=5 disk_size=91 op=GRID_DISK iters=100000 total_ns=257634911 ns_per_op=2576 ops_per_sec=388146 cells_per_sec=35321300
+bench=gridDisk res=11 k=1 disk_size=7 op=GRID_DISK iters=100000 total_ns=18239224 ns_per_op=182 ops_per_sec=5482689 cells_per_sec=38378825
+bench=gridDisk res=11 k=3 disk_size=37 op=GRID_DISK iters=100000 total_ns=100258207 ns_per_op=1002 ops_per_sec=997424 cells_per_sec=36904709
+bench=gridDisk res=11 k=5 disk_size=91 op=GRID_DISK iters=100000 total_ns=254904000 ns_per_op=2549 ops_per_sec=392304 cells_per_sec=35699714
+# zig-h3 bench: latLngToCell (ReleaseFast, MONOTONIC ns)
+bench=latLngToCell res=7 op=LATLNG_TO_CELL iters=1000000 total_ns=1046206911 ns_per_op=1046 ops_per_sec=955833
+bench=latLngToCell res=9 op=LATLNG_TO_CELL iters=1000000 total_ns=1393898121 ns_per_op=1393 ops_per_sec=717412
+bench=latLngToCell res=11 op=LATLNG_TO_CELL iters=1000000 total_ns=1469657254 ns_per_op=1469 ops_per_sec=680430
+bench=latLngToCell res=13 op=LATLNG_TO_CELL iters=1000000 total_ns=1614801400 ns_per_op=1614 ops_per_sec=619271
+bench=latLngToCell res=15 op=LATLNG_TO_CELL iters=1000000 total_ns=1750301485 ns_per_op=1750 ops_per_sec=571330
