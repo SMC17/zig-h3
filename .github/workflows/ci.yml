@@ -21,7 +21,7 @@ jobs:
           - os: macos-14
             arch: aarch64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Zig 0.16.0
         uses: mlugg/setup-zig@v2
@@ -51,7 +51,7 @@ jobs:
           - aarch64-linux-gnu
           - x86_64-linux-gnu
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Zig 0.16.0
         uses: mlugg/setup-zig@v2
