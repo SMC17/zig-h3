@@ -100,12 +100,13 @@ or implements it. We're an aspirational substitute, not a substrate.
 **Where Uber wins specifically**: h3geo.org is a Hugo/Docusaurus site
 with figures, math, tutorials, and a search index. We have a README.
 
-### 6. Performance / correctness rigor 🔴
+### 6. Performance / correctness rigor 🟡
 
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
-| Benchmark suite | 3 (latlng, gridDisk, pure-vs-libh3) | h3-py/h3-go benchmarks; comparisons to S2 and Geohash |
-| Hardware-class baselines | none documented | Uber's internal SLAs |
+| Benchmark suite | 3 (latlng, gridDisk, pure-vs-libh3) with **measured ns/op + ops/sec** in [BENCH.md](BENCH.md) | h3-py/h3-go benchmarks; comparisons to S2 and Geohash |
+| Pure-Zig vs C reference | **0.71-0.88× of libh3** (12-29% faster) on geo conversions and gridDisk (i7-1065G7, ReleaseFast) | n/a |
+| Hardware-class baselines | i7-1065G7 captured in `bench/results/2026-05-15.out` | Uber's internal SLAs |
 | Vectorization / SIMD | none in pure path; libh3 calls inherit C codegen | libh3 has explicit SIMD paths on some grids |
 | Antimeridian / polar edge cases | partial (boundary tests in pure_polygon_test.zig) | full coverage; documented quirks per resolution |
 | Coverage instrumentation | none | gcov + Codecov on CI |
