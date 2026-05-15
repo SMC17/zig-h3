@@ -11,15 +11,18 @@ time, cached thereafter.
 
 ## Status
 
-`v1.1.0` — covers 63 of the ~70 H3 v4 public functions, spanning the
-full grid / edge / vertex / polygon / IJ / compact / path API:
+`v1.2.0` — covers **all 70 H3 v4 public functions**, spanning the full
+grid / edge / vertex / polygon / IJ / compact / path API:
 
 - Lat/lng ↔ cell conversions
 - Cell boundary geometry
 - Resolution / base cell / pentagon / Class III inspection
 - Hierarchical traversal (parent, children, center child, child-position
   in ordered children list)
-- Grid disk traversal + grid distance + neighbor check
+- Grid disk traversal: `gridDisk` (safe), `gridDiskUnsafe`,
+  `gridDiskDistances`, `gridDiskDistancesSafe`,
+  `gridDiskDistancesUnsafe`, `gridDisksUnsafe` (multi-origin),
+  `gridRingUnsafe`; plus `gridDistance` + neighbor check
 - **Directed edges** (`cellsToDirectedEdge`, `isValidDirectedEdge`,
   `getDirectedEdgeOrigin/Destination`, `directedEdgeToCells`,
   `originToDirectedEdges`, `directedEdgeToBoundary`,
@@ -39,7 +42,8 @@ full grid / edge / vertex / polygon / IJ / compact / path API:
 - Resolution metadata (`getNumCells`, `getRes0Cells`, `getPentagons`,
   `res0CellCount`, `pentagonCount`)
 
-**166 tests pass** across the wrapper layer (47), the pure-Zig
+**180 tests pass** across the wrapper layer (53 — including 6 new
+tests for the safe/unsafe grid traversal variants), the pure-Zig
 cross-validation matrix (117), and the adversarial-input fuzz suite (2 —
 10 000 random-u64 inputs probed through the pure parser, plus
 NaN/Inf-input rejection). Coverage includes degrees↔radians roundtrip,
@@ -58,12 +62,10 @@ k=1 disks, local-IJ ↔ cell roundtrip on all k=1 neighbors,
 gridPathCells endpoint/contiguity verification, and compact/uncompact
 roundtrip on a full subtree.
 
-Out of scope (variant grid traversals — the safe / non-pentagon path is
-covered by `gridDisk` / `gridDistance`): `gridDiskUnsafe`,
-`gridDiskDistances`, `gridDiskDistancesSafe`,
-`gridDiskDistancesUnsafe`, `gridDisksUnsafe`, `gridRingUnsafe`. The raw
-C bindings remain exposed via the `raw` module export so callers can
-reach any unwrapped function and PR an idiomatic wrapper.
+The `raw` C bindings remain exposed via the `raw` module export as an
+escape hatch (e.g., for accessing helper utilities and `H3Error` codes
+directly) — but no longer hides any missing wrapper. Every H3 v4 public
+function has an idiomatic Zig binding.
 
 Minimum Zig version: `0.16.0`.
 
