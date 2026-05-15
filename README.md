@@ -2,10 +2,22 @@
 
 [![CI](https://github.com/SMC17/zig-h3/actions/workflows/ci.yml/badge.svg)](https://github.com/SMC17/zig-h3/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/SMC17/zig-h3?display_name=tag&sort=semver)](https://github.com/SMC17/zig-h3/releases) [![License](https://img.shields.io/github/license/SMC17/zig-h3)](LICENSE)
 
-Idiomatic Zig bindings for [H3 v4][h3-site] — Uber's hexagonal hierarchical
-spatial index. Wraps the official `libh3` C library (v4.1.0), vendored
-transparently via Zig's package manager. Build it from source the first
-time, cached thereafter.
+**Idiomatic Zig bindings for [H3 v4][h3-site] plus a parallel pure-Zig
+reimplementation cross-validated cell-by-cell against the C reference.**
+Two code paths in the same library: the wrapper around `libh3` v4.1.0
+(vendored via the Zig package manager) and a pure-Zig track exposed
+under `h3.h3index.*`, `h3.h3decode.*`, `h3.grid.*`, etc. Every pure-Zig
+function is matched against its libh3 equivalent in the test run — same
+build, same binary, no dual-implementation drift.
+
+- **166 / 166 tests pass** on Zig 0.16.0 (47 wrapper, 117 pure-Zig
+  cross-validation, 2 adversarial-input fuzz).
+- **63 of ~70 H3 v4 public functions wrapped**, full grid / edge /
+  vertex / polygon / IJ / compact / path coverage.
+- **Pure-Zig reimplementation** covers `latLngToCell`, `cellToLatLng`,
+  `cellToBoundary`, hierarchy, grid traversal, local-IJ, vertices,
+  edges, polygon ops, and more — bit-identical output to libh3 on every
+  tested input.
 
 [h3-site]: https://h3geo.org/
 
@@ -43,10 +55,19 @@ grid / edge / vertex / polygon / IJ / compact / path API:
 - Resolution metadata (`getNumCells`, `getRes0Cells`, `getPentagons`,
   `res0CellCount`, `pentagonCount`)
 
+<<<<<<< Updated upstream
 **172 tests pass** across the wrapper layer (53), the pure-Zig
 cross-validation matrix (117), and the adversarial-input fuzz suite (2 —
 10 000 random-u64 inputs probed through the pure parser, plus
 NaN/Inf-input rejection). Coverage includes degrees↔radians roundtrip,
+=======
+**166 tests pass** across the wrapper layer (47), the pure-Zig
+cross-validation suite (117 — each test calls both `root.<fn>` /
+libh3 and the pure-Zig equivalent and asserts equality), and the
+adversarial-input fuzz suite (2 — 10 000 random-u64 inputs probed
+through the pure parser, plus NaN/Inf-input rejection). Coverage
+includes degrees↔radians roundtrip,
+>>>>>>> Stashed changes
 closed-form cell-count and grid-disk-size verification, NYC / SF / Tokyo
 / Sydney / null-island / pole-adjacent cell resolution, boundary vertex
 counts, hexagonal grid disk arithmetic, k=1 neighbor and grid-distance
@@ -336,10 +357,14 @@ zig build test
 - 47 wrapper-layer tests (libh3-backed `h3.*` API — including the new
   directed-edge, vertex, polygon, local-IJ, grid-path, and
   compact/uncompact families introduced in v1.1.0)
-- 117 pure-Zig tests including the 142-input cross-validation matrix
-  (libh3 oracle vs `h3.pure.*` / `h3.h3index.*` / `h3.h3decode.*` /
+- 117 pure-Zig cross-validation tests — each test calls both the
+  libh3-backed `root.<fn>` path *and* the pure-Zig equivalent on the
+  same inputs (random cells per resolution, every res-0 base cell,
+  every pentagon at every resolution, hand-picked landmark
+  coordinates, every icosahedron face center) and asserts equality.
+  Coverage spans the `h3.pure.*` / `h3.h3index.*` / `h3.h3decode.*` /
   `h3.grid.*` / `h3.hierarchy.*` / `h3.boundary.*` / `h3.localij.*` /
-  `h3.vertex.*` / `h3.edge.*` / `h3.polygon.*` paths)
+  `h3.vertex.*` / `h3.edge.*` / `h3.polygon.*` modules.
 - 2 fuzz tests in `pure.zig` — 10 000 random-u64 inputs through the
   pure-Zig parser surface (no panics on garbage), plus NaN/Inf input
   rejection on `pure.latLngToCell`
@@ -367,64 +392,110 @@ parseable `key=value` lines. Timing uses `std.os.linux.clock_gettime(
 .MONOTONIC, &ts)` directly — `std.time.Timer` and
 `std.time.nanoTimestamp` were removed in Zig 0.16's stdlib reshuffle.
 
-Representative numbers on the maintainer's workstation (Intel Core
-i7-1065G7 @ 1.30 GHz, Linux 7.0.3-arch1-1 x86_64, Zig 0.16.0,
-`zig build bench` with `-Doptimize=ReleaseFast`):
+Representative numbers from four `benchmarked` runs on the
+maintainer's workstation (Intel Core i7-1065G7 @ 1.30 GHz, Linux
+7.0.3-arch1-1 x86_64, Zig 0.16.0, `zig build bench` →
+`-Doptimize=ReleaseFast`). The machine was under heavy concurrent
+agent load (load avg 28–55 on 8 cores) — these numbers are
+**not** quiet-room measurements. Reproduce on your hardware before
+quoting them.
 
-### latLngToCell (libh3-wrapper path)
+### Pure-Zig vs libh3, median of four runs
 
-| Resolution | ns/op  | ops/sec |
-| ---------- | ------ | ------- |
-| 7          | 6 837  | 146 K   |
-| 9          | 3 556  | 281 K   |
-| 11         | 7 483  | 134 K   |
-| 13         | 5 454  | 183 K   |
-| 15         | 8 868  | 113 K   |
+Ratio = pure ns/op ÷ libh3 ns/op. **Lower than 1.000 means pure-Zig
+is faster** on that run.
 
-### gridDisk (libh3-wrapper path)
+| Op             | Res | ratio (median of 4) | ratio range (4 runs) |
+| -------------- | --- | ------------------- | -------------------- |
+| latLngToCell   | 7   | **0.54**            | 0.40 – 0.55          |
+| latLngToCell   | 9   | 0.65                | **0.46 – 1.38**      |
+| latLngToCell   | 11  | 0.75                | 0.33 – 0.96          |
+| cellToLatLng   | 7   | 0.83                | **0.26 – 1.86**      |
+| cellToLatLng   | 9   | 0.76                | **0.47 – 1.67**      |
+| cellToLatLng   | 11  | 0.78                | 0.64 – 0.97          |
+| gridDisk k=3   | 9   | 0.79                | **0.24 – 1.78**      |
 
-| Resolution | k | disk_size | ns/op   | cells/sec |
-| ---------- | - | --------- | ------- | --------- |
-| 7          | 1 | 7         | 696     |  10.1 M   |
-| 7          | 3 | 37        | 8 560   |   4.3 M   |
-| 7          | 5 | 91        | 20 955  |   4.3 M   |
-| 9          | 1 | 7         | 898     |   7.8 M   |
-| 9          | 3 | 37        | 4 805   |   7.7 M   |
-| 9          | 5 | 91        | 14 109  |   6.4 M   |
-| 11         | 1 | 7         | 2 111   |   3.3 M   |
-| 11         | 3 | 37        | 10 074  |   3.7 M   |
-| 11         | 5 | 91        | 23 854  |   3.8 M   |
+Absolute ns/op figures vary by ±2× across runs on this contended host
+and are omitted from the headline table; re-run `zig build bench` on
+your machine and read the raw `libh3_ns_per_op=` / `pure_ns_per_op=`
+fields for ground truth.
 
-### Pure-Zig vs libh3 (the killer chart)
+Honest read-off:
 
-| Op             | Res | libh3 ns/op | pure-Zig ns/op | pure/libh3 |
-| -------------- | --- | ----------- | -------------- | ---------- |
-| latLngToCell   |  7  | 4 954       | 2 981          | **0.60x**  |
-| latLngToCell   |  9  | 5 497       | 4 619          | **0.84x**  |
-| latLngToCell   | 11  | 7 795       | 3 333          | **0.43x**  |
-| cellToLatLng   |  7  | 1 523       | 1 025          | **0.67x**  |
-| cellToLatLng   |  9  | 2 805       | 1 175          | **0.42x**  |
-| cellToLatLng   | 11  | 1 765       | 1 796          |   1.02x    |
-| gridDisk k=3   |  9  | 5 909       | 4 669          | **0.79x**  |
+- The **median** pure-Zig run is faster than libh3 on every op
+  measured. The largest wins are on `latLngToCell res 7` and
+  `gridDisk res 9 k=3`.
+- The **range** shows that on a contended host a single bench run can
+  flip pure-Zig to 1.4×–1.9× slower on the projection ops and
+  `gridDisk`. The shape "pure-Zig is competitive" is robust to noise;
+  the precise headline number on any one run is not.
+- Run-to-run variance is dominated by host load on this laptop, not by
+  the implementations. Quiet-machine numbers are likely tighter; we
+  haven't measured that yet.
 
-**Pure-Zig is at parity or faster than libh3 on every measured op at
-v0.1.0**, with the largest wins on `latLngToCell` at res 11 (2.3x
-faster) and `cellToLatLng` at res 9 (2.4x faster). The `cellToLatLng`
-res-11 row is the only "essentially tied" cell — pure is 2% slower
-than the C reference, within run-to-run noise on this laptop.
+Both paths produce bit-identical output (validated by the cross-validation
+suite at `zig build test`); the perf delta is codegen, not algorithm.
 
-The win is concentrated in the projection arithmetic: the pure-Zig
-implementation uses a flatter call graph and lets LLVM inline through
-the Phase 3 constant tables, whereas libh3 carries function-call
-overhead between `latLngToCell` → `_geoToFaceIjk` → `_geoToHex2d` →
-`_hex2dToCoordIJK` plus the C ABI on every step. Both paths produce
-bit-identical output (validated by the 142-input cross-validation
-matrix); the speedup is pure codegen.
+## Evidence vocabulary
 
-These numbers are on a busy laptop running concurrent agents;
-run-to-run variance is ±30% on the tighter rows (the ratio shape is
-stable, the absolute ns numbers fluctuate). Bring your own data on a
-quiet machine for steady measurements.
+Using the shared agent-harness proof levels:
+
+- **compiled / unit-tested / integration-tested:** 166/166 tests pass
+  on Zig 0.16.0 via `zig build test`. The pure-Zig path is
+  cross-validated cell-by-cell against libh3 in the same test binary.
+- **benchmarked:** `zig build bench` runs three benchmarks
+  (`bench/bench_latlng_to_cell.zig`, `bench/bench_grid_disk.zig`,
+  `bench/bench_pure_vs_libh3.zig`) under `-Doptimize=ReleaseFast`.
+  Numbers above are 4-run medians on a contended laptop.
+- **not yet hardware-verified at scale.** No measurements on a quiet
+  server, no measurements on aarch64, no measurements over a
+  representative production workload (e.g. real ridebook order
+  stream). The single-laptop ratios are directional, not portable.
+
+## What this measurement did *not* cover (Type-I / Type-II lens)
+
+**Type-I risks — places the "competitive" headline could over-state:**
+
+- Single-host bench, single-host noise. The same code on a quieter
+  machine or a different CPU class may shift the ratio either way.
+- Only `latLngToCell`, `cellToLatLng`, and `gridDisk` were
+  pure-vs-libh3 timed. The other 60+ wrapped functions are tested for
+  correctness but not benchmarked side-by-side; do not generalize
+  "pure-Zig is faster" beyond the three measured ops.
+- ReleaseFast only. We haven't measured ReleaseSafe / ReleaseSmall.
+- No memory / cache miss / branch-prediction profiling; the bench is
+  wall-clock ns/op only.
+
+**Type-II risks — what we may have missed:**
+
+- Edge cases not in the cross-validation matrix: antimeridian wrap,
+  exact pole coordinates (lat = ±π/2 exactly, not just ±89°),
+  sub-millimetre coordinate precision near pentagon distortion
+  boundaries.
+- The fuzz suite probes the parser surface only (10 000 random u64
+  inputs into `isValidCell` / `getResolution` / `getBaseCellNumber` /
+  `isPentagon` plus NaN/Inf into `latLngToCell`); the projection /
+  hierarchy / grid paths are not fuzzed against libh3 yet.
+- Six grid-traversal variants (`gridDiskUnsafe`, `gridDiskDistances*`,
+  `gridRingUnsafe`, `gridDisksUnsafe`) are reachable only via the
+  `raw` C-binding escape hatch — no idiomatic Zig wrapper exists yet.
+
+If you find a divergence between the pure-Zig path and libh3 on any
+input, that is a bug, please open an issue.
+
+## Composable fleet — Quantitative Mercantilism / Verifiable Fleet Engineering
+
+`zig-h3` is one hull section in a deliberately small, replaceable
+fleet of single-purpose Zig libraries. The H3 wrapper handles spatial
+indexing; `zig-graph` composes over the cell adjacency graph;
+`zig-cobs` and `zig-frame-protocol` carry messages off-host. Each
+piece is auditable independently, replaceable by a competing
+implementation that conforms to the same surface, and shipped with
+its own evidence: tests, fuzz, benchmarks, changelog. The discipline
+is the same one applied to merchant ships before the
+container — composable, correctness-first hulls that operate
+independently, are repaired at sea, and combine into larger fleets
+when the route requires it.
 
 ## Part of the Sovereign Stack
 
