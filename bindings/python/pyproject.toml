@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "zig_h3"
+version = "0.1.0"
+description = "Differential-testing client for SMC17/zig-h3. Production Python users should install h3 (Uber's official h3-py)."
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [{ name = "Sean Collins" }]
+
+[tool.hatch.build.targets.wheel]
+packages = ["zig_h3"]

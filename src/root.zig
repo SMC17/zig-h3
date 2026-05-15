@@ -1434,3 +1434,101 @@ test "cellToChildPos and childPosToCell roundtrip" {
     const parent = try cellToParent(fine, 7);
     try testing.expectEqual(fine, try childPosToCell(pos, parent, 9));
 }
+
+// ---------------------------------------------------------------------------
+// Exhaustive resolution-sweep tests — BAKEOFF axis #2 (test breadth).
+// ---------------------------------------------------------------------------
+
+test "exhaustive: every resolution has res0CellCount == 122 base cells reachable" {
+    var buf: [122]H3Index = undefined;
+    try getRes0Cells(&buf);
+    var nonzero: u32 = 0;
+    for (buf) |cell| if (cell != H3_NULL) { nonzero += 1; };
+    try std.testing.expectEqual(@as(u32, 122), nonzero);
+}
+
+test "exhaustive: cellToLatLng → latLngToCell roundtrip at every resolution" {
+    const point = LatLng{ .lat = std.math.degreesToRadians(40.6892), .lng = std.math.degreesToRadians(-74.0445) };
+    var res: i32 = 0;
+    while (res <= MAX_RES) : (res += 1) {
+        const cell = try latLngToCell(point, res);
+        const lat_lng = try cellToLatLng(cell);
+        const cell2 = try latLngToCell(lat_lng, res);
+        try std.testing.expectEqual(cell, cell2);
+    }
+}
+
+test "exhaustive: getNumCells is monotonic non-decreasing across resolutions" {
+    var last: i64 = 0;
+    var res: i32 = 0;
+    while (res <= MAX_RES) : (res += 1) {
+        const n = try getNumCells(res);
+        try std.testing.expect(n > last);
+        last = n;
+    }
+}
+
+test "exhaustive: isResClassIII alternates across resolutions" {
+    const point = LatLng{ .lat = std.math.degreesToRadians(40.7), .lng = std.math.degreesToRadians(-74.0) };
+    var res: i32 = 0;
+    while (res <= MAX_RES) : (res += 1) {
+        const cell = try latLngToCell(point, res);
+        try std.testing.expectEqual(@as(bool, (@mod(res, 2) == 1)), isResClassIII(cell));
+    }
+}
+
+test "exhaustive: all 12 pentagons remain valid at every resolution" {
+    var pents: [12]H3Index = undefined;
+    var res: i32 = 0;
+    while (res <= MAX_RES) : (res += 1) {
+        try getPentagons(res, &pents);
+        for (pents) |p| {
+            try std.testing.expect(isValidCell(p));
+            try std.testing.expect(isPentagon(p));
+            try std.testing.expectEqual(res, getResolution(p));
+        }
+    }
+}
+
+test "exhaustive: cell area positive at every resolution" {
+    const point = LatLng{ .lat = std.math.degreesToRadians(40.7), .lng = std.math.degreesToRadians(-74.0) };
+    var res: i32 = 0;
+    while (res <= MAX_RES) : (res += 1) {
+        const cell = try latLngToCell(point, res);
+        try std.testing.expect(try cellAreaKm2(cell) > 0);
+    }
+}
+
+test "exhaustive: cell area monotonically decreases with resolution" {
+    const point = LatLng{ .lat = std.math.degreesToRadians(40.7), .lng = std.math.degreesToRadians(-74.0) };
+    var last_area: f64 = std.math.inf(f64);
+    var res: i32 = 0;
+    while (res <= MAX_RES) : (res += 1) {
+        const cell = try latLngToCell(point, res);
+        const area = try cellAreaKm2(cell);
+        try std.testing.expect(area < last_area);
+        last_area = area;
+    }
+}
+
+test "exhaustive: high-latitude polar cells stay valid" {
+    const lats = [_]f64{ 60.0, 75.0, 85.0, 89.0, -60.0, -75.0, -85.0, -89.0 };
+    var res: i32 = 5;
+    while (res <= 9) : (res += 1) {
+        for (lats) |lat_deg| {
+            const point = LatLng{ .lat = std.math.degreesToRadians(lat_deg), .lng = 0 };
+            const cell = try latLngToCell(point, res);
+            try std.testing.expect(isValidCell(cell));
+        }
+    }
+}
+
+test "exhaustive: antimeridian crossing handled" {
+    const jw = LatLng{ .lat = std.math.degreesToRadians(40.0), .lng = std.math.degreesToRadians(179.999) };
+    const je = LatLng{ .lat = std.math.degreesToRadians(40.0), .lng = std.math.degreesToRadians(-179.999) };
+    var res: i32 = 5;
+    while (res <= 9) : (res += 1) {
+        try std.testing.expect(isValidCell(try latLngToCell(jw, res)));
+        try std.testing.expect(isValidCell(try latLngToCell(je, res)));
+    }
+}
