@@ -11,7 +11,8 @@ time, cached thereafter.
 
 ## Status
 
-`v1.2.0` — covers **all 70 H3 v4 public functions**, spanning the full
+`v1.2.1` — covers **all 70 H3 v4 public functions** (verified by
+`zig build coverage`), spanning the full
 grid / edge / vertex / polygon / IJ / compact / path API:
 
 - Lat/lng ↔ cell conversions
