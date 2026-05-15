@@ -42,8 +42,7 @@ grid / edge / vertex / polygon / IJ / compact / path API:
 - Resolution metadata (`getNumCells`, `getRes0Cells`, `getPentagons`,
   `res0CellCount`, `pentagonCount`)
 
-**180 tests pass** across the wrapper layer (53 — including 6 new
-tests for the safe/unsafe grid traversal variants), the pure-Zig
+**172 tests pass** across the wrapper layer (53), the pure-Zig
 cross-validation matrix (117), and the adversarial-input fuzz suite (2 —
 10 000 random-u64 inputs probed through the pure parser, plus
 NaN/Inf-input rejection). Coverage includes degrees↔radians roundtrip,
