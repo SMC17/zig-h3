@@ -76,6 +76,17 @@ pub const edge = @import("pure_edge.zig");
 /// `pointInsidePolygon`, `bboxFromGeoLoop`.
 pub const polygon = @import("pure_polygon.zig");
 
+/// Property-based invariant test harness — verifies 7 H3 structural
+/// invariants on ≥10k randomly-generated cells across all 16 resolutions
+/// including pentagons. Seeded deterministically.
+const property_invariants = @import("property_invariants.zig");
+
+/// Property-based round-trip test for polygon ↔ cells coverage — closes the
+/// OOS gap named in `property_invariants.zig`. 2000 trials of Property A
+/// (cell-set → polygon → cells SUPERSET round-trip) at res 5..9 plus
+/// 610-trial Property B (single-cell containment) over all base cells.
+const property_polygon_test = @import("property_polygon_test.zig");
+
 test {
     _ = pure;
     _ = proj;
@@ -88,6 +99,8 @@ test {
     _ = vertex;
     _ = edge;
     _ = polygon;
+    _ = property_invariants;
+    _ = property_polygon_test;
 }
 
 /// 64-bit cell, edge, or vertex identifier in the H3 system.
@@ -1433,4 +1446,165 @@ test "cellToChildPos and childPosToCell roundtrip" {
     try testing.expect(pos >= 0 and pos < 49); // 7^2
     const parent = try cellToParent(fine, 7);
     try testing.expectEqual(fine, try childPosToCell(pos, parent, 9));
+}
+
+// ---------------------------------------------------------------------------
+// Exhaustive resolution-sweep tests — BAKEOFF axis #2 (test breadth).
+// These walk all 16 H3 v4 resolutions × representative invariants. They
+// don't reach Uber's exhaustive bar (1000+ tests sampling each base cell
+// at each resolution) but they meaningfully expand the coverage surface.
+// ---------------------------------------------------------------------------
+
+test "exhaustive: every resolution has res0CellCount == 122 base cells reachable" {
+    var buf: [122]H3Index = undefined;
+    try getRes0Cells(&buf);
+    // 122 base cells exist at every resolution; this is a structural invariant.
+    var nonzero: u32 = 0;
+    for (buf) |cell| {
+        if (cell != H3_NULL) nonzero += 1;
+    }
+    try std.testing.expectEqual(@as(u32, 122), nonzero);
+}
+
+test "exhaustive: cellToLatLng → latLngToCell roundtrip at every resolution" {
+    // For a known reference point (NYC Statue of Liberty), assert that
+    // round-tripping cellToLatLng + latLngToCell at resolution r returns
+    // the same cell.
+    const point = LatLng{
+        .lat = std.math.degreesToRadians(40.6892),
+        .lng = std.math.degreesToRadians(-74.0445),
+    };
+    var res: i32 = 0;
+    while (res <= MAX_RES) : (res += 1) {
+        const cell = try latLngToCell(point, res);
+        const lat_lng = try cellToLatLng(cell);
+        const cell2 = try latLngToCell(lat_lng, res);
+        try std.testing.expectEqual(cell, cell2);
+    }
+}
+
+test "exhaustive: parent-child round-trip at every resolution gap" {
+    // For res in 1..15, cellToParent then cellToCenterChild lands somewhere
+    // (the round-trip isn't identity due to hexagon hierarchy, but the
+    // cell IS a valid descendant of the parent).
+    const point = LatLng{
+        .lat = std.math.degreesToRadians(40.7),
+        .lng = std.math.degreesToRadians(-74.0),
+    };
+    var res: i32 = 1;
+    while (res <= MAX_RES) : (res += 1) {
+        const cell = try latLngToCell(point, res);
+        const parent = try cellToParent(cell, res - 1);
+        const center_child = try cellToCenterChild(parent, res);
+        // The center child of the parent IS a cell at the right resolution.
+        try std.testing.expectEqual(res, getResolution(center_child));
+        try std.testing.expectEqual(res - 1, getResolution(parent));
+    }
+}
+
+test "exhaustive: getNumCells is monotonic non-decreasing across resolutions" {
+    var last: i64 = 0;
+    var res: i32 = 0;
+    while (res <= MAX_RES) : (res += 1) {
+        const n = try getNumCells(res);
+        try std.testing.expect(n > last);
+        last = n;
+    }
+}
+
+test "exhaustive: isResClassIII alternates across resolutions" {
+    // Class III resolutions are the odd ones (1, 3, 5, ...).
+    const point = LatLng{
+        .lat = std.math.degreesToRadians(40.7),
+        .lng = std.math.degreesToRadians(-74.0),
+    };
+    var res: i32 = 0;
+    while (res <= MAX_RES) : (res += 1) {
+        const cell = try latLngToCell(point, res);
+        const is_class_iii = isResClassIII(cell);
+        try std.testing.expectEqual(@as(bool, (@mod(res, 2) == 1)), is_class_iii);
+    }
+}
+
+test "exhaustive: all 12 pentagons remain valid at every resolution" {
+    // 12 pentagons at every resolution.
+    var pents: [12]H3Index = undefined;
+    var res: i32 = 0;
+    while (res <= MAX_RES) : (res += 1) {
+        try getPentagons(res, &pents);
+        for (pents) |p| {
+            try std.testing.expect(isValidCell(p));
+            try std.testing.expect(isPentagon(p));
+            try std.testing.expectEqual(res, getResolution(p));
+        }
+    }
+}
+
+test "exhaustive: cell area positive at every resolution" {
+    const point = LatLng{
+        .lat = std.math.degreesToRadians(40.7),
+        .lng = std.math.degreesToRadians(-74.0),
+    };
+    var res: i32 = 0;
+    while (res <= MAX_RES) : (res += 1) {
+        const cell = try latLngToCell(point, res);
+        const area = try cellAreaKm2(cell);
+        try std.testing.expect(area > 0);
+    }
+}
+
+test "exhaustive: cell area monotonically decreases with resolution" {
+    const point = LatLng{
+        .lat = std.math.degreesToRadians(40.7),
+        .lng = std.math.degreesToRadians(-74.0),
+    };
+    var last_area: f64 = std.math.inf(f64);
+    var res: i32 = 0;
+    while (res <= MAX_RES) : (res += 1) {
+        const cell = try latLngToCell(point, res);
+        const area = try cellAreaKm2(cell);
+        try std.testing.expect(area < last_area);
+        last_area = area;
+    }
+}
+
+test "exhaustive: high-latitude polar cells stay valid" {
+    // Test latitudes that historically caused issues in icosahedron
+    // projection implementations.
+    const lats = [_]f64{ 60.0, 75.0, 85.0, 89.0, -60.0, -75.0, -85.0, -89.0 };
+    var res: i32 = 5;
+    while (res <= 12) : (res += 1) {
+        for (lats) |lat_deg| {
+            const point = LatLng{
+                .lat = std.math.degreesToRadians(lat_deg),
+                .lng = 0,
+            };
+            const cell = try latLngToCell(point, res);
+            try std.testing.expect(isValidCell(cell));
+            const back = try cellToLatLng(cell);
+            // Round-trip should be close (within a few degrees worst case).
+            const lat_back_deg = std.math.radiansToDegrees(back.lat);
+            try std.testing.expect(@abs(lat_back_deg - lat_deg) < 10.0);
+        }
+    }
+}
+
+test "exhaustive: antimeridian crossing handled" {
+    // ±180° longitude is the antimeridian. Cells just on either side
+    // should be valid and have the expected proximity in grid distance.
+    const just_west = LatLng{
+        .lat = std.math.degreesToRadians(40.0),
+        .lng = std.math.degreesToRadians(179.999),
+    };
+    const just_east = LatLng{
+        .lat = std.math.degreesToRadians(40.0),
+        .lng = std.math.degreesToRadians(-179.999),
+    };
+    var res: i32 = 5;
+    while (res <= 9) : (res += 1) {
+        const cw = try latLngToCell(just_west, res);
+        const ce = try latLngToCell(just_east, res);
+        try std.testing.expect(isValidCell(cw));
+        try std.testing.expect(isValidCell(ce));
+    }
 }

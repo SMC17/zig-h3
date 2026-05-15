@@ -656,3 +656,98 @@ test "cellsToMultiPolygon on empty input returns empty multi-polygon" {
     defer mp.deinit();
     try testing.expectEqual(@as(usize, 0), mp.polygons.len);
 }
+
+// =============================================================================
+// Half-open ray-cast boundary pinning (M15 closure)
+//
+// `pointInsideGeoLoop` uses the standard half-open `p_lng < intersect_lng`
+// ray-casting convention, matching libh3. When a test point's longitude is
+// EXACTLY equal to a ray-edge intersect longitude, the original `<` says
+// "no flip" while a `<=` mutant would flip — producing a different
+// classification. The three tests below construct synthetic GeoLoops whose
+// horizontal edges produce intersect_lng values that are bit-identical f64
+// matches to the test point's longitude, then assert the documented
+// half-open classifications.
+//
+// These tests use the LatLng struct literal (raw radian values) rather than
+// `fromDegrees`, because we need bit-exact equality between the produced
+// intersect_lng and the test-point lng — the deg→rad conversion would
+// inject rounding noise.
+//
+// Each polygon's lng-extent vertex (lng = 0 or lng = 2) hits exactly one
+// horizontal edge whose intersect_lng equals p.lng, isolating the single
+// edge whose `<` vs `<=` decision differs. The three test points are
+// drawn from each side of the inversion to exercise both directions of
+// the mutant's effect.
+// =============================================================================
+
+test "pointInsideGeoLoop half-open: rectangle, point on left edge classifies as INSIDE under `<`" {
+    // 2x2 axis-aligned rectangle, CCW: (lat=0,lng=0) → (lat=2,lng=0) →
+    // (lat=2,lng=2) → (lat=0,lng=2). Edges between consecutive verts are
+    // alternately vertical (left/right) and horizontal (top/bottom).
+    const verts = [_]LatLng{
+        .{ .lat = 0.0, .lng = 0.0 },
+        .{ .lat = 2.0, .lng = 0.0 },
+        .{ .lat = 2.0, .lng = 2.0 },
+        .{ .lat = 0.0, .lng = 2.0 },
+    };
+    const loop = GeoLoop{ .verts = &verts };
+    const bbox = bboxFromGeoLoop(loop);
+
+    // p.lng = 0.0 sits exactly on the left vertical edge's lng coordinate.
+    // Edge trace (loop walks edges with `j` lagging `i`):
+    //   i=0 (bottom horiz, lat=0):     lats equal, no ray-cross, skip
+    //   i=1 (left vert,   lng=0):      slope=0, intersect_lng=0, p_lng=0 →
+    //                                  `<` FALSE (no flip), `<=` TRUE (flip)
+    //   i=2 (top horiz,   lat=2):      lats equal, no ray-cross, skip
+    //   i=3 (right vert,  lng=2):      slope=0, intersect_lng=2, p_lng=0 → flip
+    // Under `<`: 1 flip      → contains = true   → INSIDE
+    // Under `<=` mutant: 2 flips → contains = false → OUTSIDE
+    const p = LatLng{ .lat = 1.0, .lng = 0.0 };
+    try testing.expectEqual(true, pointInsideGeoLoop(loop, bbox, p));
+}
+
+test "pointInsideGeoLoop half-open: rectangle, point on right edge classifies as OUTSIDE under `<`" {
+    const verts = [_]LatLng{
+        .{ .lat = 0.0, .lng = 0.0 },
+        .{ .lat = 2.0, .lng = 0.0 },
+        .{ .lat = 2.0, .lng = 2.0 },
+        .{ .lat = 0.0, .lng = 2.0 },
+    };
+    const loop = GeoLoop{ .verts = &verts };
+    const bbox = bboxFromGeoLoop(loop);
+
+    // p.lng = 2.0 sits exactly on the right vertical edge's lng coordinate.
+    // Edge trace:
+    //   i=0 (bottom):      skip
+    //   i=1 (left vert):   slope=0, intersect_lng=0, p_lng=2 < 0 false → no flip
+    //   i=2 (top):         skip
+    //   i=3 (right vert):  slope=0, intersect_lng=2, p_lng=2 → `<` no flip,
+    //                                                          `<=` flip
+    // Under `<`: 0 flips → contains = false → OUTSIDE
+    // Under `<=` mutant: 1 flip → contains = true → INSIDE
+    const p = LatLng{ .lat = 1.0, .lng = 2.0 };
+    try testing.expectEqual(false, pointInsideGeoLoop(loop, bbox, p));
+}
+
+test "pointInsideGeoLoop half-open: right-pointing triangle, point on vertical edge classifies as INSIDE under `<`" {
+    // CCW triangle with one vertical edge at lng = 0:
+    //   V0 = (lat=0, lng=0), V1 = (lat=1, lng=0), V2 = (lat=0.5, lng=1).
+    const verts = [_]LatLng{
+        .{ .lat = 0.0, .lng = 0.0 },
+        .{ .lat = 1.0, .lng = 0.0 },
+        .{ .lat = 0.5, .lng = 1.0 },
+    };
+    const loop = GeoLoop{ .verts = &verts };
+    const bbox = bboxFromGeoLoop(loop);
+
+    // p = (lat=0.4, lng=0). Edge trace:
+    //   i=0: a=V0(0,0), b=V2(0.5,1): slope=2, intersect_lng=0.8, p_lng=0 < 0.8 → flip
+    //   i=1: a=V1(1,0), b=V0(0,0):    slope=0, intersect_lng=0,   p_lng=0     →
+    //                                 `<` no flip, `<=` flip
+    //   i=2: a=V2(0.5,1), b=V1(1,0):  both lats > p.lat → skip
+    // Under `<`: 1 flip → contains = true → INSIDE
+    // Under `<=` mutant: 2 flips → contains = false → OUTSIDE
+    const p = LatLng{ .lat = 0.4, .lng = 0.0 };
+    try testing.expectEqual(true, pointInsideGeoLoop(loop, bbox, p));
+}
