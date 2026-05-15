@@ -164,17 +164,20 @@ integrator can't verify the v1.2.1 they pulled came from us.
 | Triage cadence | best-effort | weekly triage on h3 + bindings |
 | Discussions / Discord | none | h3 GitHub Discussions + Uber DevRel |
 
-### 11. API stability commitment 🔴
+### 11. API stability commitment 🟡
 
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
-| Stable major version | v1.x | v4.x (years of stability after v3 → v4 migration) |
-| Migration guides | none | v3→v4 migration guide with per-function table |
-| Deprecation window | none stated | 18-month window in past major bumps |
+| Stable major version | v1.x with documented [`API_STABILITY.md`](API_STABILITY.md) | v4.x (years of stability after v3 → v4 migration) |
+| Migration guides | none yet | v3→v4 migration guide with per-function table |
+| Deprecation window | 6 months OR next major (documented) | 18-month window in past major bumps |
+| Pre-1.0 honesty | explicit pre-1.0-in-semver-spirit note | n/a (libh3 is post-1.0) |
+| Release provenance | GPG-signed tag + cosign blob signature | GitHub OIDC + auto-tagging |
 
-**Where Uber wins specifically**: a v4 user who upgrades to v4.2 in
-2027 has documented confidence that nothing breaks. A zig-h3 v1.2.1
-user has our intent but no contract.
+**Where Uber wins specifically**: their migration guides have been
+field-tested across hundreds of downstream consumers. Our API_STABILITY.md
+is a commitment, not a track record yet. We have the framework; we
+need the years.
 
 ### 12. Ecosystem integration depth 🔴
 
@@ -204,7 +207,11 @@ wants H3, theirs is the only option.
 
 ---
 
-## Honest score: 2 we lead 🟢 / 2 parity 🟡 / 9 Uber leads 🔴
+## Honest score (updated 2026-05-15): 2 we lead 🟢 / 3 parity 🟡 / 8 Uber leads 🔴
+
+(Was 2 / 2 / 9. Closed: axis 6 perf-rigor 🔴 → 🟡 via [BENCH.md](BENCH.md);
+axis 11 API stability 🔴 → 🟡 via [API_STABILITY.md](API_STABILITY.md) +
+double-provenance signing.)
 
 **The merchant frame on this**: zig-h3 is an *idiomatic Zig surface* on
 top of libh3. It is NOT a substitute for libh3. We win Zig ergonomics
