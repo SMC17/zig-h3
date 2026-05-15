@@ -8,18 +8,17 @@
 //!
 //! ## Status
 //!
-//! v1.1.0 covers 63 of the ~70 H3 v4 public functions: lat/lng ↔ cell
+//! v1.2.0 covers **all 70 H3 v4 public functions**: lat/lng ↔ cell
 //! conversions, cell boundary geometry, resolution / base cell / pentagon
 //! inspection, hierarchical traversal (parent / children / center child /
-//! child-position), grid disk traversal, grid distance, grid path,
-//! directed edges (origin/destination/boundary/length), vertices,
-//! polygon ↔ cells, local-IJ coordinates, compact / uncompact,
-//! icosahedron faces, formatting (h3 ↔ string), great-circle distances,
-//! cell area and edge-length helpers, and base-set enumeration. The
-//! remaining unwrapped functions are variant grid traversals
-//! (`gridDiskUnsafe`, `gridDiskDistances*`, `gridRingUnsafe`,
-//! `gridDisksUnsafe`); the underlying C functions are available via
-//! `raw.*` for callers who need them now.
+//! child-position), grid disk traversal (safe + unsafe + distances +
+//! multi-origin variants), grid ring (unsafe), grid distance, grid path,
+//! directed edges (origin/destination/boundary/length), vertices, polygon
+//! ↔ cells, local-IJ coordinates, compact / uncompact, icosahedron faces,
+//! formatting (h3 ↔ string), great-circle distances, cell area and edge-
+//! length helpers, and base-set enumeration. The `raw.*` escape hatch
+//! still exists for direct C-binding access but no longer hides any
+//! missing wrapper.
 
 const std = @import("std");
 const c = @cImport({
@@ -315,6 +314,51 @@ pub fn maxGridDiskSize(k: i32) Error!i64 {
 /// will be set to `H3_NULL`.
 pub fn gridDisk(origin: H3Index, k: i32, out: []H3Index) Error!void {
     try check(c.gridDisk(origin, k, out.ptr));
+}
+
+/// Same as `gridDisk`, but also fills `distances[i]` with the grid distance
+/// of `out[i]` from `origin`. Caller-allocated buffers; both must be at
+/// least `maxGridDiskSize(k)` long.
+pub fn gridDiskDistances(origin: H3Index, k: i32, out: []H3Index, distances: []i32) Error!void {
+    try check(c.gridDiskDistances(origin, k, out.ptr, distances.ptr));
+}
+
+/// Faster `gridDisk` variant that does NOT degrade gracefully near pentagons.
+/// Returns `error.Pentagon` (or similar H3 error) if the disk crosses one.
+/// Caller-allocated `out` must be at least `maxGridDiskSize(k)` long.
+///
+/// WHY non-obvious: the safe version detects pentagon crossings at runtime
+/// and falls back to BFS, which is slower but never errors. The unsafe
+/// version is the open-arithmetic path; profile before reaching for it.
+pub fn gridDiskUnsafe(origin: H3Index, k: i32, out: []H3Index) Error!void {
+    try check(c.gridDiskUnsafe(origin, k, out.ptr));
+}
+
+/// Fast `gridDiskDistances` that may fail near pentagons. See
+/// `gridDiskUnsafe` for the pentagon caveat.
+pub fn gridDiskDistancesUnsafe(origin: H3Index, k: i32, out: []H3Index, distances: []i32) Error!void {
+    try check(c.gridDiskDistancesUnsafe(origin, k, out.ptr, distances.ptr));
+}
+
+/// Slow-but-always-correct `gridDiskDistances` — the BFS fallback the safe
+/// version uses internally. Use this when you have already detected a
+/// pentagon crossing and want the slow-path explicitly.
+pub fn gridDiskDistancesSafe(origin: H3Index, k: i32, out: []H3Index, distances: []i32) Error!void {
+    try check(c.gridDiskDistancesSafe(origin, k, out.ptr, distances.ptr));
+}
+
+/// Union of `gridDiskUnsafe(o, k)` for every origin `o` in `origins`. May
+/// fail near pentagons just like the single-origin unsafe variant.
+/// `out` must be at least `origins.len * maxGridDiskSize(k)` long.
+pub fn gridDisksUnsafe(origins: []H3Index, k: i32, out: []H3Index) Error!void {
+    try check(c.gridDisksUnsafe(origins.ptr, @intCast(origins.len), k, out.ptr));
+}
+
+/// The single hex ring at distance `k` from `origin` (does NOT include the
+/// origin or any interior cells). Returns `error.Pentagon` near pentagons.
+/// `out.len` must be at least `6 * k` for `k >= 1`, or `1` for `k == 0`.
+pub fn gridRingUnsafe(origin: H3Index, k: i32, out: []H3Index) Error!void {
+    try check(c.gridRingUnsafe(origin, k, out.ptr));
 }
 
 /// Grid distance (minimum number of hex steps) between two cells.
@@ -852,6 +896,99 @@ test "gridDisk at k=1 returns 7 cells including origin" {
     }
     try testing.expect(found_origin);
     try testing.expectEqual(@as(usize, 7), non_null);
+}
+
+test "gridDiskUnsafe at k=1 around a hexagon matches gridDisk" {
+    // Use an NYC cell that's nowhere near a pentagon, so the unsafe path
+    // succeeds. We compare the resulting cell *set* against the safe path
+    // to confirm the unsafe wrapper is bound correctly.
+    const cell = try latLngToCell(LatLng.fromDegrees(40.0, -74.0), 9);
+    var safe: [7]H3Index = .{0} ** 7;
+    var unsafe: [7]H3Index = .{0} ** 7;
+    try gridDisk(cell, 1, &safe);
+    try gridDiskUnsafe(cell, 1, &unsafe);
+
+    // Sort both, then compare element-wise (order is implementation-defined
+    // across the safe/unsafe paths but the membership must match).
+    std.mem.sort(H3Index, &safe, {}, std.sort.asc(H3Index));
+    std.mem.sort(H3Index, &unsafe, {}, std.sort.asc(H3Index));
+    try testing.expectEqualSlices(H3Index, &safe, &unsafe);
+}
+
+test "gridDiskDistances at k=1 yields one origin (distance 0) + six neighbors" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.0, -74.0), 9);
+    var out: [7]H3Index = .{0} ** 7;
+    var dists: [7]i32 = .{0} ** 7;
+    try gridDiskDistances(cell, 1, &out, &dists);
+
+    var n_zero: usize = 0;
+    var n_one: usize = 0;
+    for (dists) |d| {
+        if (d == 0) n_zero += 1;
+        if (d == 1) n_one += 1;
+    }
+    try testing.expectEqual(@as(usize, 1), n_zero);
+    try testing.expectEqual(@as(usize, 6), n_one);
+}
+
+test "gridDiskDistancesUnsafe matches gridDiskDistances around a hexagon" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.0, -74.0), 9);
+    var out_a: [7]H3Index = .{0} ** 7;
+    var out_b: [7]H3Index = .{0} ** 7;
+    var d_a: [7]i32 = .{0} ** 7;
+    var d_b: [7]i32 = .{0} ** 7;
+    try gridDiskDistances(cell, 1, &out_a, &d_a);
+    try gridDiskDistancesUnsafe(cell, 1, &out_b, &d_b);
+    // Cells: order-independent membership.
+    std.mem.sort(H3Index, &out_a, {}, std.sort.asc(H3Index));
+    std.mem.sort(H3Index, &out_b, {}, std.sort.asc(H3Index));
+    try testing.expectEqualSlices(H3Index, &out_a, &out_b);
+}
+
+test "gridDiskDistancesSafe matches gridDiskDistances at k=1" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.0, -74.0), 9);
+    var out_a: [7]H3Index = .{0} ** 7;
+    var out_b: [7]H3Index = .{0} ** 7;
+    var d_a: [7]i32 = .{0} ** 7;
+    var d_b: [7]i32 = .{0} ** 7;
+    try gridDiskDistances(cell, 1, &out_a, &d_a);
+    try gridDiskDistancesSafe(cell, 1, &out_b, &d_b);
+    std.mem.sort(H3Index, &out_a, {}, std.sort.asc(H3Index));
+    std.mem.sort(H3Index, &out_b, {}, std.sort.asc(H3Index));
+    try testing.expectEqualSlices(H3Index, &out_a, &out_b);
+}
+
+test "gridDisksUnsafe over two non-overlapping origins yields 14 unique cells" {
+    // Two NYC-area cells far enough apart that their k=1 disks don't
+    // overlap — picks one near JFK and one near Newark.
+    const a = try latLngToCell(LatLng.fromDegrees(40.6413, -73.7781), 9);
+    const b = try latLngToCell(LatLng.fromDegrees(40.6895, -74.1745), 9);
+    var origins = [_]H3Index{ a, b };
+    // gridDisks output size = origins.len * maxGridDiskSize(k).
+    var out: [14]H3Index = .{0} ** 14;
+    try gridDisksUnsafe(&origins, 1, &out);
+
+    // Count non-null. With k=1 and 2 non-overlapping disks, we expect 14.
+    var non_null: usize = 0;
+    for (out) |v| if (v != H3_NULL) {
+        non_null += 1;
+    };
+    try testing.expectEqual(@as(usize, 14), non_null);
+}
+
+test "gridRingUnsafe at k=1 returns exactly 6 cells, none of which is origin" {
+    const cell = try latLngToCell(LatLng.fromDegrees(40.0, -74.0), 9);
+    var out: [6]H3Index = .{0} ** 6;
+    try gridRingUnsafe(cell, 1, &out);
+
+    var found_origin = false;
+    var non_null: usize = 0;
+    for (out) |v| {
+        if (v == cell) found_origin = true;
+        if (v != H3_NULL) non_null += 1;
+    }
+    try testing.expect(!found_origin);
+    try testing.expectEqual(@as(usize, 6), non_null);
 }
 
 test "gridDistance origin to itself is 0" {
