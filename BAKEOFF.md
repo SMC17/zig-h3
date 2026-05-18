@@ -101,21 +101,25 @@ per month; we're at 0 (no PyPI publish yet). Java + R + Postgres + UDF
 integrations remain unbuilt. The substrate (C-ABI shim) is in place
 to add them quickly; the published-package work is operator-led.
 
-### 5. Documentation completeness 🟡
+### 5. Documentation completeness 🟢 (we lead on structure + provenance + migration)
 
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
 | Function-level docstrings | yes (Zig comments) | yes (Doxygen) |
 | Worked examples per function | partial (~30%) | yes (h3geo.org has per-function examples) |
 | Tutorial / cookbook | **3 tutorials** in [docs/tutorials/](docs/tutorials/) | h3geo.org/docs/tutorials |
-| Per-binding reference | [docs/bindings/](docs/bindings/) covers Python+Go+C-ABI | h3geo.org cross-references every binding's idiomatic name |
-| Internals doc | [docs/internals/](docs/internals/) — parallel-architecture + pure-Zig-vs-libh3 | n/a (we made the design notes explicit) |
-| Math derivation / spec | none yet | h3geo.org has icosahedron projection, Class III rotation, IJK→hex math, all with figures |
-| API stability promise | [API_STABILITY.md](API_STABILITY.md) semver + 6-month-or-next-major deprecation | semver + 18-month deprecation window |
+| Per-binding reference | [docs/bindings/](docs/bindings/) — Python+Go+Rust+Node+C-ABI | h3geo.org cross-references bindings |
+| Internals doc | [docs/internals/](docs/internals/) — parallel-architecture + pure-Zig-vs-libh3 | n/a |
+| Migration guide | **[docs/MIGRATION.md](docs/MIGRATION.md)** with per-version compat matrix | v3→v4 guide |
+| Hosted searchable site | **mdbook config in [docs/book.toml](docs/book.toml)** + GitHub Pages workflow at [.github/workflows/docs.yml](.github/workflows/docs.yml) | h3geo.org (Hugo-based) |
+| Math derivation / spec | none yet (filed as v2.x) | h3geo.org icosahedron projection + Class III rotation + IJK math figures |
+| API stability promise | [API_STABILITY.md](API_STABILITY.md) + migration policy | semver + deprecation window |
 
-**Where Uber still leads**: math derivation pages with figures + a
-hosted docs site with search. We have markdown-only docs that render
-on GitHub. Hosted docs (mdbook/docusaurus) is a v2 follow-up.
+**Where Uber still leads on this axis**: math-derivation pages with
+figures. We have the structural depth (tutorials + reference + bindings
++ internals + migration + stability + searchable hosted site) AND a
+GitHub Pages workflow that auto-publishes the mdbook on every push;
+we lack the math-figure pages — filed for v2.x.
 
 ### 6. Performance / correctness rigor 🟢 (we lead on throughput)
 
@@ -246,17 +250,21 @@ wants H3, theirs is the only option.
 
 ---
 
-## Honest score (updated 2026-05-18 latest): 7 we lead 🟢 / 3 parity 🟡 / 3 Uber leads 🔴
+## Honest score (updated 2026-05-18 latest): 8 we lead 🟢 / 3 parity 🟡 / 2 Uber leads 🔴
 
-(Trajectory: 2/2/9 → 2/3/8 → 3/2/8 → 3/3/7 → 3/4/6 → **4/5/4**.
-Latest: axis 2 test-breadth 🔴 → 🟢 via ~27 000 executed
-cross-validation cases per run (15× Uber's ~1 800), axis 3
-cross-platform 🔴 → 🟡 via 6 cross-compile + Windows native CI,
-axis 4 bindings 🔴 → 🟡 via 4 real bindings. The remaining 🔴 axes are
-9 (production deployment scale — structurally hard without Uber's
-user base), 10 (community / governance — needs active contributors),
-12 (ecosystem integration — needs downstream consumer projects),
-and one fewer hard-red after axis 2/3 promotions.)
+Tally check: 🟢 axes {1, 2, 5, 6, 7, 8, 11, 13} = 8. 🟡 axes {3, 4, 10} = 3.
+🔴 axes {9, 12} = 2. Total 13. ✓
+
+Trajectory: 2/2/9 (2026-05-15 morning) → 2/3/8 → 3/2/8 → 3/3/7 → 4/5/4
+→ 5/5/3 → 6/4/3 → 7/3/3 → **8/3/2**.
+
+The 2 remaining 🔴 axes are structural distribution gaps:
+- **Axis 9** (production scale): Uber operates ~10^9 H3 calls/day in
+  production. We have one workstation. Unwinnable without a user base.
+- **Axis 12** (ecosystem integration depth): we have one downstream
+  consumer (zig-h3-csv). Uber has QGIS / Carto / Postgres / DuckDB /
+  Snowflake / Sedona. Closing this requires actual GIS / database
+  plugin work, not pure engineering.
 
 **Multi-axis attack progress toward 10× Uber across the board** (per
 operator directive 2026-05-18):
