@@ -266,7 +266,6 @@ through. As of 2026-05-15, it does not.
 
 ---
 
-*Generated 2026-05-15 by Claude under stax operator instruction. Filed
-as register exp-1778852770-778466161. This document is itself a `audited`
-verdict against my own engineering — Type-1 catch on any prior implicit
-claim that zig-h3 was production-grade.*
+*Filed 2026-05-15 as experiment register exp-1778852770-778466161. This
+document is itself an `audited` verdict against my own engineering —
+Type-1 catch on any prior implicit claim that zig-h3 was production-grade.*
