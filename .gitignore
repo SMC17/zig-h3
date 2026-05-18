@@ -9,3 +9,11 @@ zig-pkg/
 *.so
 *.dylib
 *.dll
+
+# Coverage tooling artifacts (kcov output regenerated per run)
+coverage-out/
+# Python binding caches
+bindings/python/**/__pycache__/
+bindings/python/.pytest_cache/
+coverage-out/
+bindings/go/
