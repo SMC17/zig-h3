@@ -11,10 +11,12 @@ time, cached thereafter.
 
 ## Status
 
-`v1.3.0` — covers **all 70 H3 v4 public functions** (verified by
+`v1.4.0` — covers **all 70 H3 v4 public functions** (verified by
 `tools/coverage-check.sh`, the public-symbol regression guard),
-spanning the full
-grid / edge / vertex / polygon / IJ / compact / path API:
+spanning the full grid / edge / vertex / polygon / IJ / compact /
+path API. **Line coverage on `src/root.zig`: 94.40% (219/232 lines)**
+measured by `tools/coverage.sh` (kcov against a dedicated
+`coverage-driver` executable; reproducible in CI on every push).
 
 - Lat/lng ↔ cell conversions
 - Cell boundary geometry

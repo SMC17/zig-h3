@@ -1,3 +1,25 @@
+## [1.4.0] — 2026-05-18
+
+### Added
+- **Line coverage measurement: 94.40% on `src/root.zig`** (219/232 lines).
+  Adopts the zig-cobs v1.2.0 coverage-driver pattern:
+  - `examples/coverage_driver.zig` — single-binary executable that
+    exercises the load-bearing public API surface across the 75 `pub fn`
+    declarations + every reachable error path.
+  - `tools/coverage.sh` — wrapper that builds in Debug, runs
+    `kcov --include-pattern=root.zig`, prints the line %, and fails on
+    coverage below 80%.
+  - `.github/workflows/ci.yml` — `line-coverage (kcov)` job runs on
+    every push and uploads kcov HTML as a CI artifact.
+- README status line names the 94.40% measurement.
+
+### Why not 100%
+- The 13 uncovered lines (5.6%) are predominantly defensive `unreachable`
+  branches inside `try` chains, `errdefer` cleanup hit only when an inner
+  call errors, and the `cellToLocalIj` / `localIjToCell` paths that
+  require a specific (origin, cell) topological relationship to exercise
+  cleanly from a hermetic driver.
+
 ## Unreleased
 
 ### Added
