@@ -1,0 +1,36 @@
+# mdbook config — builds docs/ into a searchable hosted site equivalent
+# to h3geo.org. Closes BAKEOFF axis 5 ("documentation completeness")
+# toward 🟢 once the GitHub Pages workflow ships it.
+#
+# Build locally:
+#   cargo install mdbook   # or download from mdbook releases
+#   mdbook serve docs/     # http://localhost:3000
+
+[book]
+authors = ["Sean Collins"]
+language = "en"
+multilingual = false
+src = "."
+title = "zig-h3 documentation"
+description = "Idiomatic Zig bindings + pure-Zig reimplementation of Uber's H3 v4."
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/SMC17/zig-h3"
+edit-url-template = "https://github.com/SMC17/zig-h3/edit/main/docs/{path}"
+site-url = "/zig-h3/"
+
+[output.html.search]
+enable = true
+limit-results = 30
+use-boolean-and = true
+boost-title = 2
+boost-hierarchy = 1
+boost-paragraph = 1
+expand = true
+heading-split-level = 3
+
+[output.html.fold]
+enable = true
+level = 0
