@@ -1210,3 +1210,166 @@ test "pure latLngToCell at res 0 produces only valid base cells" {
         try testing.expect(bc_num >= 0 and bc_num < NUM_BASE_CELLS);
     }
 }
+
+// =============================================================================
+// Batch API — amortizes per-call overhead and provides vectorization /
+// parallelization entry points for the BAKEOFF axis-6 push (target: 10× libh3
+// on batch workloads).
+// =============================================================================
+
+/// Batch latLngToCell — single-threaded amortization. Iterates the pure-Zig
+/// scalar path with branch-predictor-friendly hot-loop layout. Skips error
+/// returns on per-point failure (writes H3_NULL=0 for those slots).
+///
+/// Contract: `out.len >= points.len`. Returns the number of successfully
+/// converted points (i.e., count of non-NULL slots).
+pub fn latLngToCellBatch(points: []const LatLng, res: i32, out: []H3Index) usize {
+    std.debug.assert(out.len >= points.len);
+    if (res < 0 or res > MAX_RES) {
+        @memset(out[0..points.len], 0);
+        return 0;
+    }
+    var ok_count: usize = 0;
+    for (points, 0..) |point, i| {
+        if (!std.math.isFinite(point.lat) or !std.math.isFinite(point.lng)) {
+            out[i] = 0;
+            continue;
+        }
+        const h2 = proj.geoToHex2d(point, res);
+        const ijk = proj.hex2dToCoordIJK(h2.v);
+        const fijk = FaceIJK{ .face = h2.face, .coord = ijk };
+        const cell = faceIjkToH3(fijk, res);
+        out[i] = cell;
+        if (cell != 0) ok_count += 1;
+    }
+    return ok_count;
+}
+
+const BatchWork = struct {
+    points: []const LatLng,
+    res: i32,
+    out: []H3Index,
+    ok_count: usize = 0,
+};
+
+fn batchWorker(work: *BatchWork) void {
+    work.ok_count = latLngToCellBatch(work.points, work.res, work.out);
+}
+
+/// Parallel batch latLngToCell. Splits the input across `thread_count`
+/// workers; each worker runs `latLngToCellBatch` on its slice. Threads are
+/// joined before return.
+///
+/// `thread_count` typically should equal `std.Thread.getCpuCount()`. Passing
+/// 1 degenerates to the serial path (no Thread.spawn at all).
+///
+/// Contract: `out.len >= points.len`. Returns total successfully-converted
+/// point count.
+pub fn latLngToCellBatchParallel(
+    allocator: std.mem.Allocator,
+    points: []const LatLng,
+    res: i32,
+    out: []H3Index,
+    thread_count: usize,
+) !usize {
+    std.debug.assert(out.len >= points.len);
+    if (thread_count <= 1 or points.len < 1024) {
+        return latLngToCellBatch(points, res, out);
+    }
+
+    const works = try allocator.alloc(BatchWork, thread_count);
+    defer allocator.free(works);
+    const threads = try allocator.alloc(std.Thread, thread_count);
+    defer allocator.free(threads);
+
+    const chunk = (points.len + thread_count - 1) / thread_count;
+    for (works, 0..) |*w, i| {
+        const start = i * chunk;
+        if (start >= points.len) {
+            w.* = .{ .points = &.{}, .res = res, .out = out[0..0] };
+            continue;
+        }
+        const end = @min(start + chunk, points.len);
+        w.* = .{
+            .points = points[start..end],
+            .res = res,
+            .out = out[start..end],
+        };
+    }
+    for (threads, works) |*t, *w| {
+        if (w.points.len == 0) {
+            t.* = undefined;
+            continue;
+        }
+        t.* = try std.Thread.spawn(.{}, batchWorker, .{w});
+    }
+    var total: usize = 0;
+    for (threads, works) |*t, *w| {
+        if (w.points.len == 0) continue;
+        t.join();
+        total += w.ok_count;
+    }
+    return total;
+}
+
+test "latLngToCellBatch matches scalar path on a 64-point landmark sweep" {
+    const landmarks = [_]LatLng{
+        LatLng.fromDegrees(40.6892, -74.0445),
+        LatLng.fromDegrees(37.7749, -122.4194),
+        LatLng.fromDegrees(51.5074, -0.1278),
+        LatLng.fromDegrees(35.6762, 139.6503),
+        LatLng.fromDegrees(-33.8688, 151.2093),
+        LatLng.fromDegrees(0.0, 0.0),
+        LatLng.fromDegrees(89.0, 0.0),
+        LatLng.fromDegrees(-89.0, 0.0),
+    };
+    var points: [64]LatLng = undefined;
+    for (&points, 0..) |*p, i| p.* = landmarks[i % landmarks.len];
+    var batch_out: [64]H3Index = undefined;
+    const ok = latLngToCellBatch(&points, 9, &batch_out);
+    try testing.expectEqual(@as(usize, 64), ok);
+    for (points, batch_out) |p, b| {
+        const scalar = try latLngToCell(p, 9);
+        try testing.expectEqual(scalar, b);
+    }
+}
+
+test "latLngToCellBatchParallel matches scalar path on a 4096-point random sweep" {
+    var prng = std.Random.DefaultPrng.init(0xBA7C_1234_5678_9ABC);
+    var points: [4096]LatLng = undefined;
+    for (&points) |*p| {
+        const lat = (prng.random().float(f64) - 0.5) * 178.0;
+        const lng = (prng.random().float(f64) - 0.5) * 358.0;
+        p.* = LatLng.fromDegrees(lat, lng);
+    }
+    var batch_out: [4096]H3Index = undefined;
+    const ok = try latLngToCellBatchParallel(std.testing.allocator, &points, 9, &batch_out, 4);
+    try testing.expectEqual(@as(usize, 4096), ok);
+    // Spot-check first/last/middle against scalar
+    for ([_]usize{ 0, 1, 1000, 2048, 4095 }) |i| {
+        const scalar = try latLngToCell(points[i], 9);
+        try testing.expectEqual(scalar, batch_out[i]);
+    }
+}
+
+test "latLngToCellBatch rejects out-of-range resolution with all-zero output" {
+    const points = [_]LatLng{ LatLng.fromDegrees(40.0, -74.0) };
+    var out: [1]H3Index = .{1};
+    const ok = latLngToCellBatch(&points, 16, &out);
+    try testing.expectEqual(@as(usize, 0), ok);
+    try testing.expectEqual(@as(H3Index, 0), out[0]);
+}
+
+test "latLngToCellBatch with NaN input produces NULL slot, others succeed" {
+    const points = [_]LatLng{
+        LatLng.fromDegrees(40.0, -74.0),
+        .{ .lat = std.math.nan(f64), .lng = 0.0 },
+        LatLng.fromDegrees(37.7, -122.4),
+    };
+    var out: [3]H3Index = undefined;
+    const ok = latLngToCellBatch(&points, 7, &out);
+    try testing.expectEqual(@as(usize, 2), ok);
+    try testing.expect(out[0] != 0);
+    try testing.expectEqual(@as(H3Index, 0), out[1]);
+    try testing.expect(out[2] != 0);
+}

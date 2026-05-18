@@ -403,6 +403,121 @@ pub fn cellToLatLng(cell: H3Index) Error!LatLng {
 }
 
 // =============================================================================
+// Batch API — amortized + parallel inverse projection
+// =============================================================================
+
+/// Batch cellToLatLng — single-threaded amortization. Writes a LatLng for
+/// every input cell; cells that fail decode get a NaN-LatLng sentinel.
+/// Returns count of successfully decoded cells.
+pub fn cellToLatLngBatch(cells: []const H3Index, out: []LatLng) usize {
+    std.debug.assert(out.len >= cells.len);
+    var ok_count: usize = 0;
+    for (cells, 0..) |cell, i| {
+        out[i] = cellToLatLng(cell) catch .{
+            .lat = std.math.nan(f64),
+            .lng = std.math.nan(f64),
+        };
+        if (!std.math.isNan(out[i].lat)) ok_count += 1;
+    }
+    return ok_count;
+}
+
+const InvBatchWork = struct {
+    cells: []const H3Index,
+    out: []LatLng,
+    ok_count: usize = 0,
+};
+
+fn invBatchWorker(work: *InvBatchWork) void {
+    work.ok_count = cellToLatLngBatch(work.cells, work.out);
+}
+
+/// Parallel batch cellToLatLng. Splits across thread_count workers; each
+/// worker runs cellToLatLngBatch on its slice. Threads joined before return.
+/// Below 1024 cells, degenerates to serial path.
+pub fn cellToLatLngBatchParallel(
+    allocator: std.mem.Allocator,
+    cells: []const H3Index,
+    out: []LatLng,
+    thread_count: usize,
+) !usize {
+    std.debug.assert(out.len >= cells.len);
+    if (thread_count <= 1 or cells.len < 1024) {
+        return cellToLatLngBatch(cells, out);
+    }
+
+    const works = try allocator.alloc(InvBatchWork, thread_count);
+    defer allocator.free(works);
+    const threads = try allocator.alloc(std.Thread, thread_count);
+    defer allocator.free(threads);
+
+    const chunk = (cells.len + thread_count - 1) / thread_count;
+    for (works, 0..) |*w, i| {
+        const start = i * chunk;
+        if (start >= cells.len) {
+            w.* = .{ .cells = &.{}, .out = out[0..0] };
+            continue;
+        }
+        const end = @min(start + chunk, cells.len);
+        w.* = .{ .cells = cells[start..end], .out = out[start..end] };
+    }
+    for (threads, works) |*t, *w| {
+        if (w.cells.len == 0) {
+            t.* = undefined;
+            continue;
+        }
+        t.* = try std.Thread.spawn(.{}, invBatchWorker, .{w});
+    }
+    var total: usize = 0;
+    for (threads, works) |*t, *w| {
+        if (w.cells.len == 0) continue;
+        t.join();
+        total += w.ok_count;
+    }
+    return total;
+}
+
+const h3idx_for_test = @import("pure_h3index.zig");
+
+test "cellToLatLngBatch matches scalar on 128 random cells" {
+    var rng = std.Random.DefaultPrng.init(0xDEC0DE_C0FFEE_1234);
+    var cells: [128]H3Index = undefined;
+    for (&cells) |*c| {
+        const lat = (rng.random().float(f64) - 0.5) * 178.0;
+        const lng = (rng.random().float(f64) - 0.5) * 358.0;
+        const point = h3idx_for_test.LatLng.fromDegrees(lat, lng);
+        c.* = try h3idx_for_test.latLngToCell(point, 9);
+    }
+    var out: [128]LatLng = undefined;
+    const ok = cellToLatLngBatch(&cells, &out);
+    try testing.expectEqual(@as(usize, 128), ok);
+    for (cells, out) |cell, ll| {
+        const scalar = try cellToLatLng(cell);
+        try testing.expectEqual(scalar.lat, ll.lat);
+        try testing.expectEqual(scalar.lng, ll.lng);
+    }
+}
+
+test "cellToLatLngBatchParallel matches scalar on 4096 random cells" {
+    var rng = std.Random.DefaultPrng.init(0xC0DE_BABE_DEAD_F00D);
+    var cells: [4096]H3Index = undefined;
+    for (&cells) |*c| {
+        const lat = (rng.random().float(f64) - 0.5) * 178.0;
+        const lng = (rng.random().float(f64) - 0.5) * 358.0;
+        const point = h3idx_for_test.LatLng.fromDegrees(lat, lng);
+        c.* = try h3idx_for_test.latLngToCell(point, 9);
+    }
+    var out: [4096]LatLng = undefined;
+    const ok = try cellToLatLngBatchParallel(std.testing.allocator, &cells, &out, 4);
+    try testing.expectEqual(@as(usize, 4096), ok);
+    for ([_]usize{ 0, 1, 100, 2000, 4095 }) |i| {
+        const scalar = try cellToLatLng(cells[i]);
+        try testing.expectEqual(scalar.lat, out[i].lat);
+        try testing.expectEqual(scalar.lng, out[i].lng);
+    }
+}
+
+// =============================================================================
 // Cross-validation tests
 // =============================================================================
 
