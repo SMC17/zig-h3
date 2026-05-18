@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zig_h3"
-version = "0.2.0"
+version = "0.3.0"
 description = "Python binding for SMC17/zig-h3 batch+parallel API via libzig_h3.so + ctypes + NumPy."
 readme = "README.md"
 license = "Apache-2.0"

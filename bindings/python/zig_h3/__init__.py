@@ -21,7 +21,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __all__ = [
     "latlng_to_cell_batch",
     "cell_to_latlng_batch",
@@ -128,17 +128,24 @@ def max_grid_disk_size(k: int) -> int:
     return result
 
 
-def latlng_to_cell_batch(points, res: int, threads: int = 1):
+_DEG_TO_RAD = 0.017453292519943295  # math.pi / 180
+_RAD_TO_DEG = 57.29577951308232  # 180 / math.pi
+
+
+def latlng_to_cell_batch(points, res: int, threads: int = 1, *, units: str = "degrees"):
     """Batch lat/lng → H3 cell.
 
     `points` is either:
       - a NumPy float64 array of shape (N, 2), columns [lat, lng]
       - a sequence of (lat, lng) tuples (will be converted)
 
+    `units` is "degrees" (default, matches h3-py) or "radians" (libh3's
+    internal convention, faster — no conversion needed).
+
     Returns NumPy uint64 array of length N. Failed conversions are 0.
 
-    `threads > 1` invokes the parallel path (each worker processes a
-    slice). Below 1024 points the serial path is used regardless.
+    `threads > 1` invokes the parallel path. Below 1024 points the
+    serial path is used regardless.
     """
     try:
         import numpy as np
@@ -152,8 +159,12 @@ def latlng_to_cell_batch(points, res: int, threads: int = 1):
     if n == 0:
         return np.empty(0, dtype=np.uint64)
 
-    # Interpret as LatLng[] via ctypes — the memory layout is two f64s,
-    # matching our extern struct.
+    if units == "degrees":
+        arr = arr * _DEG_TO_RAD  # creates a fresh radians array
+    elif units != "radians":
+        raise ValueError(f"units must be 'degrees' or 'radians'; got {units!r}")
+
+    arr = np.ascontiguousarray(arr, dtype=np.float64)
     points_ptr = arr.ctypes.data_as(ctypes.POINTER(LatLng))
     out = np.empty(n, dtype=np.uint64)
     out_ptr = out.ctypes.data_as(ctypes.POINTER(ctypes.c_uint64))
@@ -165,10 +176,12 @@ def latlng_to_cell_batch(points, res: int, threads: int = 1):
     return out
 
 
-def cell_to_latlng_batch(cells, threads: int = 1):
+def cell_to_latlng_batch(cells, threads: int = 1, *, units: str = "degrees"):
     """Batch H3 cell → lat/lng centroids.
 
     `cells` is a NumPy uint64 array (or convertible sequence).
+    `units` is "degrees" (default, matches h3-py) or "radians".
+
     Returns NumPy float64 array of shape (N, 2). Failed decodes are NaN.
 
     `threads > 1` uses the parallel path.
@@ -191,6 +204,11 @@ def cell_to_latlng_batch(cells, threads: int = 1):
         _lib.zig_h3_cell_to_latlng_batch_parallel(cells_ptr, n, out_ptr, threads)
     else:
         _lib.zig_h3_cell_to_latlng_batch(cells_ptr, n, out_ptr)
+
+    if units == "degrees":
+        out *= _RAD_TO_DEG
+    elif units != "radians":
+        raise ValueError(f"units must be 'degrees' or 'radians'; got {units!r}")
     return out
 
 
@@ -223,3 +241,127 @@ def grid_disk_batch(origins, k: int, threads: int = 1):
     else:
         _lib.zig_h3_grid_disk_batch(origins_ptr, n, k, stride, out_ptr)
     return out
+
+# ============================================================================
+# Scalar single-cell API — added v0.3.0 with extended cabi surface
+# ============================================================================
+
+_lib.zig_h3_latlng_to_cell.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_int32]
+_lib.zig_h3_latlng_to_cell.restype = ctypes.c_uint64
+
+_lib.zig_h3_cell_to_latlng.argtypes = [
+    ctypes.c_uint64,
+    ctypes.POINTER(ctypes.c_double),
+    ctypes.POINTER(ctypes.c_double),
+]
+_lib.zig_h3_cell_to_latlng.restype = ctypes.c_bool
+
+_lib.zig_h3_is_valid_cell.argtypes = [ctypes.c_uint64]
+_lib.zig_h3_is_valid_cell.restype = ctypes.c_bool
+
+_lib.zig_h3_is_pentagon.argtypes = [ctypes.c_uint64]
+_lib.zig_h3_is_pentagon.restype = ctypes.c_bool
+
+_lib.zig_h3_get_resolution.argtypes = [ctypes.c_uint64]
+_lib.zig_h3_get_resolution.restype = ctypes.c_int32
+
+_lib.zig_h3_get_base_cell_number.argtypes = [ctypes.c_uint64]
+_lib.zig_h3_get_base_cell_number.restype = ctypes.c_int32
+
+_lib.zig_h3_cell_to_parent.argtypes = [ctypes.c_uint64, ctypes.c_int32]
+_lib.zig_h3_cell_to_parent.restype = ctypes.c_uint64
+
+_lib.zig_h3_cell_to_center_child.argtypes = [ctypes.c_uint64, ctypes.c_int32]
+_lib.zig_h3_cell_to_center_child.restype = ctypes.c_uint64
+
+_lib.zig_h3_grid_distance.argtypes = [ctypes.c_uint64, ctypes.c_uint64]
+_lib.zig_h3_grid_distance.restype = ctypes.c_int64
+
+_lib.zig_h3_cell_area_km2.argtypes = [ctypes.c_uint64]
+_lib.zig_h3_cell_area_km2.restype = ctypes.c_double
+
+_lib.zig_h3_cell_centroid_distance_km.argtypes = [ctypes.c_uint64, ctypes.c_uint64]
+_lib.zig_h3_cell_centroid_distance_km.restype = ctypes.c_double
+
+_lib.zig_h3_cell_to_parent_n.argtypes = [ctypes.c_uint64, ctypes.c_int32]
+_lib.zig_h3_cell_to_parent_n.restype = ctypes.c_uint64
+
+
+def latlng_to_cell(lat: float, lng: float, res: int, *, units: str = "degrees") -> int:
+    """Scalar lat/lng → cell. Returns 0 on error.
+
+    `units` is "degrees" (default, matches h3-py) or "radians".
+    """
+    if units == "degrees":
+        lat = lat * _DEG_TO_RAD
+        lng = lng * _DEG_TO_RAD
+    elif units != "radians":
+        raise ValueError(f"units must be 'degrees' or 'radians'; got {units!r}")
+    return _lib.zig_h3_latlng_to_cell(lat, lng, res)
+
+
+def cell_to_latlng(cell: int, *, units: str = "degrees") -> tuple[float, float]:
+    """Scalar cell → (lat, lng). Returns (nan, nan) on error.
+
+    `units` is "degrees" (default, matches h3-py) or "radians".
+    """
+    lat = ctypes.c_double(0)
+    lng = ctypes.c_double(0)
+    _lib.zig_h3_cell_to_latlng(cell, ctypes.byref(lat), ctypes.byref(lng))
+    if units == "degrees":
+        return (lat.value * _RAD_TO_DEG, lng.value * _RAD_TO_DEG)
+    elif units == "radians":
+        return (lat.value, lng.value)
+    else:
+        raise ValueError(f"units must be 'degrees' or 'radians'; got {units!r}")
+
+
+def is_valid_cell(cell: int) -> bool:
+    return _lib.zig_h3_is_valid_cell(cell)
+
+
+def is_pentagon(cell: int) -> bool:
+    return _lib.zig_h3_is_pentagon(cell)
+
+
+def get_resolution(cell: int) -> int:
+    return _lib.zig_h3_get_resolution(cell)
+
+
+def get_base_cell_number(cell: int) -> int:
+    return _lib.zig_h3_get_base_cell_number(cell)
+
+
+def cell_to_parent(cell: int, parent_res: int) -> int:
+    """Walk up to parent at the given resolution. 0 on error."""
+    return _lib.zig_h3_cell_to_parent(cell, parent_res)
+
+
+def cell_to_center_child(cell: int, child_res: int) -> int:
+    return _lib.zig_h3_cell_to_center_child(cell, child_res)
+
+
+def grid_distance(a: int, b: int) -> int:
+    """Grid distance between two same-res cells. -1 on error."""
+    return _lib.zig_h3_grid_distance(a, b)
+
+
+def cell_area_km2(cell: int) -> float:
+    """Cell area in km². NaN on error."""
+    return _lib.zig_h3_cell_area_km2(cell)
+
+
+def cell_centroid_distance_km(a: int, b: int) -> float:
+    """Great-circle distance between cell centroids, in km. NaN on error.
+
+    Goes BEYOND libh3 — convenience composition that saves a Python round-trip.
+    """
+    return _lib.zig_h3_cell_centroid_distance_km(a, b)
+
+
+def cell_to_parent_n(cell: int, levels: int) -> int:
+    """Walk up N hierarchy levels in one call. 0 on error.
+
+    Goes BEYOND libh3 — convenience that h3-py / h3-go / h3o don't ship.
+    """
+    return _lib.zig_h3_cell_to_parent_n(cell, levels)

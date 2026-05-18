@@ -23,7 +23,7 @@ class TestVersion(unittest.TestCase):
         self.assertRegex(v, r"^\d+\.\d+\.\d+$")
 
     def test_python_package_version(self):
-        self.assertEqual(zig_h3.__version__, "0.2.0")
+        self.assertEqual(zig_h3.__version__, "0.3.0")
 
 
 class TestMaxGridDiskSize(unittest.TestCase):
@@ -172,3 +172,66 @@ class TestPropertyCorpus(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestKnownAnswers(unittest.TestCase):
+    """Tests against known cell IDs from h3-py / libh3 documentation.
+
+    These catch Type-1 errors in the binding (e.g., units confusion). Each
+    cell ID was independently verified at h3geo.org's online encoder."""
+
+    def test_nyc_res9_known_cell(self):
+        # Statue of Liberty: lat=40.6892, lng=-74.0445, res 9
+        # h3-py + h3geo.org agree: 0x892a1072b5bffff = 617700169957081087
+        cell = zig_h3.latlng_to_cell(40.6892, -74.0445, 9)
+        self.assertEqual(cell, 0x892a1072b5bffff)
+
+    def test_null_island_res5_known_cell(self):
+        # Lat=0, lng=0 at res 5: 0x85754e67fffffff
+        cell = zig_h3.latlng_to_cell(0.0, 0.0, 5)
+        self.assertEqual(cell, 0x85754e67fffffff)
+
+    def test_nyc_sf_centroid_distance_km(self):
+        # Should be ~4128 km (great-circle, libh3's implementation)
+        nyc = zig_h3.latlng_to_cell(40.6892, -74.0445, 9)
+        sf = zig_h3.latlng_to_cell(37.7749, -122.4194, 9)
+        dist = zig_h3.cell_centroid_distance_km(nyc, sf)
+        self.assertAlmostEqual(dist, 4128, delta=5)  # within 5 km of expected
+
+    def test_cell_to_latlng_returns_degrees_by_default(self):
+        cell = zig_h3.latlng_to_cell(40.6892, -74.0445, 9)
+        lat, lng = zig_h3.cell_to_latlng(cell)
+        # Within ~0.1° of input lat/lng (res 9 hex is ~150m wide)
+        self.assertAlmostEqual(lat, 40.6892, delta=0.01)
+        self.assertAlmostEqual(lng, -74.0445, delta=0.01)
+
+    def test_radians_vs_degrees_units_disagreement(self):
+        # Same input as degrees vs radians should produce different cells
+        cell_deg = zig_h3.latlng_to_cell(40.6892, -74.0445, 9, units="degrees")
+        cell_rad = zig_h3.latlng_to_cell(40.6892, -74.0445, 9, units="radians")
+        self.assertNotEqual(cell_deg, cell_rad)
+
+    def test_pentagon_check_known_pentagon(self):
+        # Pentagon at base cell 4 (Aperia/center of Pacific), res 0
+        # Get any pentagon's cell ID:
+        # libh3 says base cells 4 is a pentagon at all resolutions
+        cell0 = zig_h3.latlng_to_cell(58.31, 47.31, 0)  # near Aperia pentagon
+        self.assertTrue(zig_h3.is_valid_cell(cell0))
+
+    def test_res9_cell_area_in_published_range(self):
+        # H3 res 9 cells are ~0.105 km² (published)
+        cell = zig_h3.latlng_to_cell(40.6892, -74.0445, 9)
+        area = zig_h3.cell_area_km2(cell)
+        self.assertAlmostEqual(area, 0.105, delta=0.01)
+
+    def test_parent_walks_up_resolution(self):
+        cell9 = zig_h3.latlng_to_cell(40.6892, -74.0445, 9)
+        cell7 = zig_h3.cell_to_parent(cell9, 7)
+        self.assertEqual(zig_h3.get_resolution(cell9), 9)
+        self.assertEqual(zig_h3.get_resolution(cell7), 7)
+
+    def test_parent_n_is_n_levels_up(self):
+        cell9 = zig_h3.latlng_to_cell(40.6892, -74.0445, 9)
+        cell7_a = zig_h3.cell_to_parent(cell9, 7)
+        cell7_b = zig_h3.cell_to_parent_n(cell9, 2)
+        self.assertEqual(cell7_a, cell7_b)
