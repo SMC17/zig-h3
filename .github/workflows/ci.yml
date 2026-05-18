@@ -50,6 +50,10 @@ jobs:
           # native macos-14 runner above covers those targets natively.
           - aarch64-linux-gnu
           - x86_64-linux-gnu
+          - x86_64-linux-musl
+          - aarch64-linux-musl
+          - x86_64-windows-gnu
+          - aarch64-windows-gnu
     steps:
       - uses: actions/checkout@v6
 
@@ -60,6 +64,72 @@ jobs:
 
       - name: zig build -Dtarget=${{ matrix.target }}
         run: zig build -Dtarget=${{ matrix.target }}
+
+  windows-native:
+    name: windows-latest (${{ matrix.arch }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Zig 0.16.0
+        uses: mlugg/setup-zig@v2
+        with:
+          version: "0.16.0"
+      - name: zig build (Windows native)
+        run: zig build
+      - name: zig build test (Windows native)
+        run: zig build test --summary all
+
+  python-binding:
+    name: python-binding (libzig_h3.so + ctypes + NumPy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install Zig 0.16.0
+        uses: mlugg/setup-zig@v2
+        with:
+          version: "0.16.0"
+      - name: Build shared lib (ReleaseFast)
+        run: zig build -Doptimize=ReleaseFast
+      - name: Install Python binding + test deps
+        working-directory: bindings/python
+        run: |
+          pip install -e .
+          pip install pytest
+      - name: Run Python tests
+        working-directory: bindings/python
+        env:
+          ZIG_H3_LIB: ${{ github.workspace }}/zig-out/lib/libzig_h3.so
+        run: pytest tests/ -v
+
+  go-binding:
+    name: go-binding (cgo + libzig_h3.so)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.22"
+      - name: Install Zig 0.16.0
+        uses: mlugg/setup-zig@v2
+        with:
+          version: "0.16.0"
+      - name: Build shared lib (ReleaseFast)
+        run: zig build -Doptimize=ReleaseFast
+      - name: Run Go tests
+        working-directory: bindings/go/zigh3
+        env:
+          CGO_LDFLAGS: -L${{ github.workspace }}/zig-out/lib
+          LD_LIBRARY_PATH: ${{ github.workspace }}/zig-out/lib
+        run: |
+          go mod init zigh3 2>/dev/null || true
+          go test -v ./...
 
   coverage:
     name: line-coverage (kcov)

@@ -236,6 +236,10 @@ fn buildLibH3(
         .target = target,
         .optimize = optimize,
         .link_libc = true,
+        // PIC required so libh3 can be linked into the shared cabi shim
+        // (libzig_h3.so) without R_X86_64_32 relocation errors. Also helps
+        // musl cross-compile.
+        .pic = true,
     });
     libh3_mod.addConfigHeader(h3api_h);
     libh3_mod.addIncludePath(h3c.path("src/h3lib/include"));
