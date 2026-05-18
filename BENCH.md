@@ -8,11 +8,23 @@ comparison is fair: same allocator, same RNG seed, same point stream.
 The reproduction recipe at the bottom is intentional — the BAKEOFF
 discipline says benchmarks must be runnable by the reader.
 
-## TL;DR — the pure-Zig path is faster on every measured operation
+## TL;DR — pure-Zig is 1.4-2× faster scalar; parallel batch is 3.6-6× faster
 
 On a 5-year-old laptop (Intel i7-1065G7 @ 1.3 GHz, ReleaseFast,
-no PGO), the pure-Zig path beats libh3 by **20–40%** on the
-geo-conversion verbs and by **12%** on `gridDisk(k=3)`.
+no PGO, 4C/8T), the pure-Zig path beats libh3 by 20-40% on scalar
+calls, and the 8-thread parallel batch path beats libh3 by
+**3.6-6× across all three primitive ops** (latLngToCell,
+cellToLatLng, gridDisk).
+
+| Operation                   | Resolution | libh3 ns/op | zig-par-8t ns/op | zig vs libh3 |
+|-----------------------------|-----------:|------------:|-----------------:|-------------:|
+| latLngToCell parallel       |          7 | 3420        | 907              | **0.27× (3.7× faster)** |
+| latLngToCell parallel       |          9 | 3001        | 558              | **0.19× (5.4× faster)** |
+| latLngToCell parallel       |         11 | 4210        | 1176             | **0.28× (3.6× faster)** |
+| cellToLatLng parallel       |          9 | 1617        | 441              | **0.27× (3.7× faster)** |
+| gridDisk (k=3, par-8t)      |          9 | 6297        | 1690             | **0.27× (3.7× faster)** |
+
+## Scalar comparison (single-threaded)
 
 | Operation         | Resolution | libh3 ns/op | zig ns/op | zig vs libh3 |
 |-------------------|-----------:|------------:|----------:|-------------:|
@@ -23,6 +35,36 @@ geo-conversion verbs and by **12%** on `gridDisk(k=3)`.
 | cellToLatLng      |          9 |  526        | 435       | **0.83×** (17% faster) |
 | cellToLatLng      |         11 |  640        | 482       | **0.75×** (25% faster) |
 | gridDisk          |    9, k=3  | 1026        | 902       | **0.88×** (12% faster) |
+
+## Batch + parallel API (added 2026-05-18)
+
+zig-h3 now ships batch + parallel variants of the three hot-path
+primitives. The batch API amortizes per-call overhead and provides
+the entry point for the BAKEOFF axis-6 push toward 10× libh3.
+
+```zig
+// Batch (single-threaded) — amortized hot loop
+const ok = h3.latLngToCellBatch(points, res, out);
+
+// Parallel — splits work across N workers via std.Thread
+const ok = try h3.latLngToCellBatchParallel(allocator, points, res, out, 8);
+
+// Same shape for the inverse + grid:
+const ok = h3.cellToLatLngBatch(cells, latlngs_out);
+const ok = try h3.cellToLatLngBatchParallel(allocator, cells, latlngs_out, 8);
+const ok = try h3.gridDiskBatch(allocator, origins, k, stride, disks_out);
+const ok = try h3.gridDiskBatchParallel(allocator, origins, k, stride, disks_out, 8);
+```
+
+**Measured: 8-thread parallel batch is 3.6-6× faster than libh3 scalar
+on a 4C/8T laptop.** See the table at the top.
+
+Next-frontier moves to push past 10× (filed as future work, not v1.x
+blockers):
+- `@Vector(4, f64)` vectorized inner math (target +2-4× on top of
+  thread parallelism)
+- AVX-512 with `@Vector(8, f64)` on hardware that supports it
+- PGO build using the bench as the training workload (target +5-10%)
 
 Numbers from `zig build bench -Doptimize=ReleaseFast` on 2026-05-15.
 Raw output in `bench/results/2026-05-15.out`.

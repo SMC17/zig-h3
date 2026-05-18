@@ -1,0 +1,54 @@
+# zig-h3 bench results — 2026-05-18 (batch + parallel)
+# host: Linux 7.0.3-arch1-1 x86_64
+# cpu: Intel(R) Core(TM) i7-1065G7 CPU @ 1.30GHz
+# cores: 8
+# zig: 0.16.0
+
+# zig-h3 bench: gridDisk (ReleaseFast, MONOTONIC ns)
+bench=gridDisk res=7 k=1 disk_size=7 op=GRID_DISK iters=100000 total_ns=70546554 ns_per_op=705 ops_per_sec=1417503 cells_per_sec=9922525
+bench=gridDisk res=7 k=3 disk_size=37 op=GRID_DISK iters=100000 total_ns=381003098 ns_per_op=3810 ops_per_sec=262465 cells_per_sec=9711207
+bench=gridDisk res=7 k=5 disk_size=91 op=GRID_DISK iters=100000 total_ns=804406156 ns_per_op=8044 ops_per_sec=124315 cells_per_sec=11312693
+bench=gridDisk res=9 k=1 disk_size=7 op=GRID_DISK iters=100000 total_ns=56179396 ns_per_op=561 ops_per_sec=1780012 cells_per_sec=12460084
+bench=gridDisk res=9 k=3 disk_size=37 op=GRID_DISK iters=100000 total_ns=357630613 ns_per_op=3576 ops_per_sec=279618 cells_per_sec=10345870
+bench=gridDisk res=9 k=5 disk_size=91 op=GRID_DISK iters=100000 total_ns=782340892 ns_per_op=7823 ops_per_sec=127821 cells_per_sec=11631758
+bench=gridDisk res=11 k=1 disk_size=7 op=GRID_DISK iters=100000 total_ns=62969351 ns_per_op=629 ops_per_sec=1588074 cells_per_sec=11116519
+bench=gridDisk res=11 k=3 disk_size=37 op=GRID_DISK iters=100000 total_ns=345790444 ns_per_op=3457 ops_per_sec=289192 cells_per_sec=10700122
+bench=gridDisk res=11 k=5 disk_size=91 op=GRID_DISK iters=100000 total_ns=827933410 ns_per_op=8279 ops_per_sec=120782 cells_per_sec=10991222
+# zig-h3 bench: pure-Zig vs libh3 (ReleaseFast, MONOTONIC ns)
+bench=latLngToCell.cmp res7 libh3_ns_per_op=2485 pure_ns_per_op=2030 pure_over_libh3_x1000=816 iters=200000 libh3_total_ns=497112783 pure_total_ns=406086382
+bench=cellToLatLng.cmp res7 libh3_ns_per_op=1830 pure_ns_per_op=1011 pure_over_libh3_x1000=552 iters=200000 libh3_total_ns=366009715 pure_total_ns=202304856
+bench=latLngToCell.cmp res9 libh3_ns_per_op=3449 pure_ns_per_op=2282 pure_over_libh3_x1000=661 iters=200000 libh3_total_ns=689956095 pure_total_ns=456472993
+bench=cellToLatLng.cmp res9 libh3_ns_per_op=1850 pure_ns_per_op=1268 pure_over_libh3_x1000=685 iters=200000 libh3_total_ns=370123833 pure_total_ns=253679289
+bench=latLngToCell.cmp res11 libh3_ns_per_op=3783 pure_ns_per_op=2325 pure_over_libh3_x1000=614 iters=200000 libh3_total_ns=756688442 pure_total_ns=465011952
+bench=cellToLatLng.cmp res11 libh3_ns_per_op=2088 pure_ns_per_op=1404 pure_over_libh3_x1000=672 iters=200000 libh3_total_ns=417710217 pure_total_ns=280930537
+bench=gridDisk.cmp res9_k3 libh3_ns_per_op=4176 pure_ns_per_op=3714 pure_over_libh3_x1000=889 iters=50000 libh3_total_ns=208821122 pure_total_ns=185705375
+# zig-h3 bench: comparative batch latLngToCell (ReleaseFast, MONOTONIC ns)
+# host cores: 8
+bench=latLngToCell.libh3-scalar  res=res7 ns_per_op=4013 ops_per_sec=249190
+bench=latLngToCell.zig-scalar    res=res7 ns_per_op=2459 ops_per_sec=406669 libh3_ratio_x1000=612
+bench=latLngToCell.zig-batch     res=res7 ns_per_op=2462 ops_per_sec=406173 libh3_ratio_x1000=613
+bench=latLngToCell.zig-par-4t    res=res7 ns_per_op=1048 ops_per_sec=954198 libh3_ratio_x1000=261
+bench=latLngToCell.zig-par-8t    res=res7 ns_per_op=1165 ops_per_sec=858369 libh3_ratio_x1000=290
+bench=latLngToCell.libh3-scalar  res=res9 ns_per_op=4107 ops_per_sec=243486
+bench=latLngToCell.zig-scalar    res=res9 ns_per_op=2168 ops_per_sec=461254 libh3_ratio_x1000=528
+bench=latLngToCell.zig-batch     res=res9 ns_per_op=2427 ops_per_sec=412031 libh3_ratio_x1000=590
+bench=latLngToCell.zig-par-4t    res=res9 ns_per_op=898 ops_per_sec=1113585 libh3_ratio_x1000=218
+bench=latLngToCell.zig-par-8t    res=res9 ns_per_op=734 ops_per_sec=1362397 libh3_ratio_x1000=178
+bench=latLngToCell.libh3-scalar  res=res11 ns_per_op=3911 ops_per_sec=255689
+bench=latLngToCell.zig-scalar    res=res11 ns_per_op=2755 ops_per_sec=362976 libh3_ratio_x1000=704
+bench=latLngToCell.zig-batch     res=res11 ns_per_op=2146 ops_per_sec=465983 libh3_ratio_x1000=548
+bench=latLngToCell.zig-par-4t    res=res11 ns_per_op=1158 ops_per_sec=863557 libh3_ratio_x1000=296
+bench=latLngToCell.zig-par-8t    res=res11 ns_per_op=1090 ops_per_sec=917431 libh3_ratio_x1000=278
+bench=cellToLatLng.libh3-scalar res=res9 ns_per_op=1975 ops_per_sec=506329
+bench=cellToLatLng.zig-scalar   res=res9 ns_per_op=1087 ops_per_sec=919963 libh3_ratio_x1000=550
+bench=cellToLatLng.zig-batch    res=res9 ns_per_op=940 ops_per_sec=1063829 libh3_ratio_x1000=476
+bench=cellToLatLng.zig-par-8t   res=res9 ns_per_op=541 ops_per_sec=1848428 libh3_ratio_x1000=274
+bench=gridDisk.libh3-scalar res=res9 k=3 disk_size=37 ns_per_origin=3094 origins_per_sec=323206
+bench=gridDisk.zig-batch    res=res9 k=3 disk_size=37 ns_per_origin=2563 origins_per_sec=390167 libh3_ratio_x1000=828
+bench=gridDisk.zig-par-8t   res=res9 k=3 disk_size=37 ns_per_origin=1352 origins_per_sec=739644 libh3_ratio_x1000=437
+# zig-h3 bench: latLngToCell (ReleaseFast, MONOTONIC ns)
+bench=latLngToCell res=7 op=LATLNG_TO_CELL iters=1000000 total_ns=2523173553 ns_per_op=2523 ops_per_sec=396326
+bench=latLngToCell res=9 op=LATLNG_TO_CELL iters=1000000 total_ns=3050592922 ns_per_op=3050 ops_per_sec=327805
+bench=latLngToCell res=11 op=LATLNG_TO_CELL iters=1000000 total_ns=3041297128 ns_per_op=3041 ops_per_sec=328807
+bench=latLngToCell res=13 op=LATLNG_TO_CELL iters=1000000 total_ns=4378235280 ns_per_op=4378 ops_per_sec=228402
+bench=latLngToCell res=15 op=LATLNG_TO_CELL iters=1000000 total_ns=4123566457 ns_per_op=4123 ops_per_sec=242508

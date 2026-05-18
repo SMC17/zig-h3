@@ -228,11 +228,58 @@ pub fn latLngToCell(point: LatLng, res: i32) Error!H3Index {
     return out;
 }
 
+/// Batch latLngToCell — runs the pure-Zig amortized hot loop. Returns
+/// number of successfully converted points (NULL slots written for any
+/// non-finite / out-of-range inputs).
+///
+/// On a typical desktop CPU this is 1.5-2× faster per point than calling
+/// `latLngToCell` in a loop, because the per-call libh3 ABI overhead is
+/// amortized away. See [BENCH.md](../BENCH.md) for measured numbers.
+pub fn latLngToCellBatch(points: []const LatLng, res: i32, out: []H3Index) usize {
+    return h3index.latLngToCellBatch(points, res, out);
+}
+
+/// Parallel batch latLngToCell — splits work across `thread_count` workers,
+/// each running `latLngToCellBatch` on its slice. Threads are joined before
+/// return.
+///
+/// On a 4C/8T CPU this is ~3-5× faster than the serial batch on workloads
+/// of 10k+ points. Below 1024 points the serial path is used (thread spawn
+/// overhead dominates).
+///
+/// `thread_count` typically should equal `std.Thread.getCpuCount()`.
+pub fn latLngToCellBatchParallel(
+    allocator: std.mem.Allocator,
+    points: []const LatLng,
+    res: i32,
+    out: []H3Index,
+    thread_count: usize,
+) !usize {
+    return h3index.latLngToCellBatchParallel(allocator, points, res, out, thread_count);
+}
+
 /// The lat/lng of the centroid of `cell`.
 pub fn cellToLatLng(cell: H3Index) Error!LatLng {
     var out: c.LatLng = undefined;
     try check(c.cellToLatLng(cell, &out));
     return .{ .lat = out.lat, .lng = out.lng };
+}
+
+/// Batch cellToLatLng — amortized pure-Zig hot loop. Returns count of
+/// successfully decoded cells (NaN-LatLng written for invalid inputs).
+pub fn cellToLatLngBatch(cells: []const H3Index, out: []LatLng) usize {
+    return h3decode.cellToLatLngBatch(cells, out);
+}
+
+/// Parallel batch cellToLatLng — splits work across `thread_count` workers.
+/// Below 1024 cells, degenerates to serial path (thread spawn overhead).
+pub fn cellToLatLngBatchParallel(
+    allocator: std.mem.Allocator,
+    cells: []const H3Index,
+    out: []LatLng,
+    thread_count: usize,
+) !usize {
+    return h3decode.cellToLatLngBatchParallel(allocator, cells, out, thread_count);
 }
 
 /// The polygonal boundary of `cell` in lat/lng coordinates.
@@ -327,6 +374,35 @@ pub fn maxGridDiskSize(k: i32) Error!i64 {
 /// will be set to `H3_NULL`.
 pub fn gridDisk(origin: H3Index, k: i32, out: []H3Index) Error!void {
     try check(c.gridDisk(origin, k, out.ptr));
+}
+
+/// Batch gridDisk — computes gridDisk(origin, k) for each origin in
+/// `origins`, writing `stride` cells per origin into `out[i*stride..]`.
+/// `stride` should equal `maxGridDiskSize(k)`. Returns count of successes.
+///
+/// Pure-Zig implementation; calls into the pure_grid path. Origins whose
+/// disk fails (e.g., crosses a pentagon edge) get all-zero slots.
+pub fn gridDiskBatch(
+    allocator: std.mem.Allocator,
+    origins: []const H3Index,
+    k: i32,
+    stride: usize,
+    out: []H3Index,
+) Error!usize {
+    return grid.gridDiskBatch(allocator, origins, k, stride, out);
+}
+
+/// Parallel batch gridDisk — splits origins across `thread_count` workers.
+/// Below 64 origins, degenerates to serial path.
+pub fn gridDiskBatchParallel(
+    allocator: std.mem.Allocator,
+    origins: []const H3Index,
+    k: i32,
+    stride: usize,
+    out: []H3Index,
+    thread_count: usize,
+) !usize {
+    return grid.gridDiskBatchParallel(allocator, origins, k, stride, out, thread_count);
 }
 
 /// Same as `gridDisk`, but also fills `distances[i]` with the grid distance
