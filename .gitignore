@@ -23,3 +23,9 @@ bindings/node/zigh3/node_modules/
 bindings/node/zigh3/package-lock.json
 bindings/rust/zigh3/target/
 bindings/rust/zigh3/Cargo.lock
+
+# Built ecosystem extension artifacts (rebuildable from source)
+ecosystem/postgres/zig_h3.so
+ecosystem/sqlite/zig_h3.so
+ecosystem/postgres/zig_h3.o
+ecosystem/sqlite/zig_h3.o

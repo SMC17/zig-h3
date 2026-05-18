@@ -1,0 +1,5 @@
+comment = 'H3 v4 hexagonal hierarchical spatial index via libzig_h3.so'
+default_version = '1.0'
+module_pathname = '$libdir/zig_h3'
+relocatable = true
+trusted = false
