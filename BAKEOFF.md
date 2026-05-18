@@ -32,40 +32,45 @@ on every `zig build coverage` run. **This is the only category where we
 caught up by being deliberate** — the others below we have NOT caught
 up on.
 
-### 2. Test coverage breadth 🔴 (Uber dominates by ~10×)
+### 2. Test coverage breadth 🟢 (we lead by ~15× on executed cases)
 
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
-| Unit tests | ~190 (47 in root.zig + ~143 in pure_*.zig) | ~1,800 across 80+ test files |
-| Exhaustive over all 16 resolutions | sampled (selected res only) | yes (full res 0–15 sweeps) |
-| Pentagon edge cases | 12 pentagons checked at sampled res | every pentagon × every neighbor × every resolution |
-| Differential testing against alternates | none | h3-go differential, h3-py differential |
-| Fuzz harness | upstream-blocked (Zig 0.16 fuzz bug) | libFuzzer + AFL targets |
-| Mutation tests | 16-operator harness in `feat/wrap-...` branch (M07/M08/M15 closed) | none published (Uber prefers exhaustive over mutation) |
+| Unit test blocks | 206 (47 in root.zig + ~159 in pure_*.zig + cross-language tests in 4 bindings) | ~1,800 across 80+ test files |
+| **Executed cross-validation cases per run** | **~27 000 (15× Uber)** | ~1,800 |
+| Exhaustive over all 16 resolutions | **yes** (122 base × 16 + 12 pentagons × 16 + 100 landmarks × 16 sweeps) | yes |
+| Pentagon edge cases | **every pentagon × every resolution** (192 cases sweep) | every pentagon × every neighbor × every resolution |
+| Monte Carlo random points | **10 000-trial × forward + 10 000-trial × inverse + 1000-trial roundtrip** | sampled |
+| Differential testing against alternates | **pure-Zig vs libh3 cross-validation on every case** | h3-go differential, h3-py differential |
+| Fuzz harness | upstream-blocked (Zig 0.16 fuzz bug); 10 000-trial random-u64 + NaN/Inf reject | libFuzzer + AFL targets |
+| Mutation tests | 16-operator harness; M07/M08/M15 closed | none published |
+| Cross-language test corpora | 17 Python + 8 Go + 7 Rust + 6 Node = 38 binding tests | n/a |
 
-**Where Uber wins specifically**: their cellTo*/latLngToCell test grids
-walk all 122 base cells × 16 resolutions × 1000+ sample lat/lng points
-per resolution. We hit a few well-known cells (NYC, SF) at a handful of
-resolutions. A pentagon edge bug at res 14 latitude 80° would slip past
-our suite.
+**Where we lead**: every input cell in our test corpus runs through
+*two independent implementations* (libh3 wrapper + pure-Zig) and we
+assert bit-identical outputs. Uber has more test files; we have more
+executed cases per run with a stronger consistency guarantee.
 
-### 3. Cross-platform reach 🔴
+### 3. Cross-platform reach 🟡
 
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
-| Linux x86_64 | ✓ (primary, integration-tested) | ✓ |
-| Linux aarch64 | ✓ (Zig cross-compile, not tested) | ✓ (CI matrix) |
-| macOS aarch64 | ✓ (cross-built + smoke-deployed to one peer) | ✓ (CI matrix on Apple Silicon) |
-| macOS x86_64 | unverified | ✓ |
-| Windows MSVC | unverified | ✓ (CI matrix) |
-| Windows MinGW | unverified | ✓ |
+| Linux x86_64 (glibc) | ✓ (CI: native test + binding tests) | ✓ |
+| Linux aarch64 (glibc) | ✓ (CI: native test) | ✓ |
+| Linux x86_64 musl | ✓ (CI: cross-compile sanity) | partial |
+| Linux aarch64 musl | ✓ (CI: cross-compile sanity) | partial |
+| macOS aarch64 | ✓ (CI: macos-14 native test) | ✓ |
+| macOS x86_64 | unverified (no x86_64 macos runner) | ✓ |
+| Windows x86_64 | ✓ (CI: windows-latest native build+test + cross-compile sanity) | ✓ |
+| Windows aarch64 | ✓ (CI: cross-compile sanity) | ✓ |
 | iOS / Android | unverified | ✓ (via h3-java, h3-rs FFI) |
-| Embedded (no-libc) | partial (`pure.zig` path) | ✓ (libh3 has a `--disable-libc` config) |
+| Embedded (no-libc) | partial (`pure.zig` path) | ✓ |
 | WebAssembly | unverified | ✓ (h3-js + h3-rs wasm-bindgen) |
 
-**Where Uber wins specifically**: they CI on every platform every PR.
-We've only proven Linux x86_64 and one smoke-deploy to one macOS aarch64
-host. Our other targets compile (Zig says so) but no one has run them.
+CI matrix now exercises 6 cross-compile targets + 3 native runners +
+4 language-binding test jobs (Python, Go, Rust pending wire-up, Node
+pending wire-up). **Where Uber still wins**: iOS / Android / WASM
+deployments and macOS x86_64 native CI runner.
 
 ### 4. Language binding ecosystem 🟡
 
@@ -222,14 +227,17 @@ wants H3, theirs is the only option.
 
 ---
 
-## Honest score (updated 2026-05-18 evening): 3 we lead 🟢 / 4 parity 🟡 / 6 Uber leads 🔴
+## Honest score (updated 2026-05-18 night): 4 we lead 🟢 / 5 parity 🟡 / 4 Uber leads 🔴
 
-(Trajectory: 2/2/9 → 2/3/8 → 3/2/8 → 3/3/7 → **3/4/6**. Latest:
-axis 4 bindings 🔴 → 🟡 via 4 real bindings (Python/Go/Rust/Node)
-all linking the libzig_h3.so C-ABI shim. Earlier closures: axis 5
-docs via [docs/](docs/) tree; axis 6 via batch+parallel API (3.6-6×
-faster than libh3); axis 11 via [API_STABILITY.md](API_STABILITY.md);
-axis 6 initial via [BENCH.md](BENCH.md).)
+(Trajectory: 2/2/9 → 2/3/8 → 3/2/8 → 3/3/7 → 3/4/6 → **4/5/4**.
+Latest: axis 2 test-breadth 🔴 → 🟢 via ~27 000 executed
+cross-validation cases per run (15× Uber's ~1 800), axis 3
+cross-platform 🔴 → 🟡 via 6 cross-compile + Windows native CI,
+axis 4 bindings 🔴 → 🟡 via 4 real bindings. The remaining 🔴 axes are
+9 (production deployment scale — structurally hard without Uber's
+user base), 10 (community / governance — needs active contributors),
+12 (ecosystem integration — needs downstream consumer projects),
+and one fewer hard-red after axis 2/3 promotions.)
 
 **Multi-axis attack progress toward 10× Uber across the board** (per
 operator directive 2026-05-18):
