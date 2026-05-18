@@ -18,6 +18,14 @@ path API. **Line coverage on `src/root.zig`: 94.40% (219/232 lines)**
 measured by `tools/coverage.sh` (kcov against a dedicated
 `coverage-driver` executable; reproducible in CI on every push).
 
+**New in v1.4.0**: batch + parallel API (`latLngToCellBatch`,
+`cellToLatLngBatch`, `gridDiskBatch` and `*Parallel` variants).
+8-thread parallel batch is **3.6-6× faster than libh3 scalar** on
+geo-conversions and gridDisk (see [BENCH.md](BENCH.md)). Plus
+real Python binding via `libzig_h3.so` + ctypes + NumPy
+([bindings/python/](bindings/python/)) and Go binding via cgo
+([bindings/go/zigh3/](bindings/go/zigh3/)).
+
 - Lat/lng ↔ cell conversions
 - Cell boundary geometry
 - Resolution / base cell / pentagon / Class III inspection
@@ -46,14 +54,17 @@ measured by `tools/coverage.sh` (kcov against a dedicated
 - Resolution metadata (`getNumCells`, `getRes0Cells`, `getPentagons`,
   `res0CellCount`, `pentagonCount`)
 
-**190 tests pass** across the wrapper layer, the pure-Zig
-cross-validation matrix, the adversarial-input fuzz suite
-(10 000 random-u64 inputs probed through the pure parser, plus
-NaN/Inf-input rejection), the 10k-trial property-based H3-invariant
-harness, the 2000-trial polygon round-trip property test, the
+**206 tests pass** with **~27,000 executed cross-validation cases per
+run** through deterministic property corpora (122 base cells × 16
+resolutions sweep, 12 pentagons × 16 resolutions sweep, 100-landmark
+× 16 resolutions sweep, 10 000-trial Monte Carlo on both forward +
+inverse geo conversions, 1000-trial roundtrip idempotency), the
+existing adversarial-input fuzz suite (10 000 random-u64 inputs +
+NaN/Inf-rejection), the 10k-trial property-based H3-invariant
+harness, the 2000-trial polygon round-trip property test, and the
 16-operator mutation-testing harness (M07/M08 isValidCell + M15
-pointInsideGeoLoop boundary gaps closed), and the exhaustive
-resolution-sweep matrix across all 16 H3 v4 resolutions. Coverage includes degrees↔radians roundtrip,
+pointInsideGeoLoop boundary gaps closed). The Python binding adds
+its own 10 000-trial roundtrip test against the parallel path. Coverage includes degrees↔radians roundtrip,
 closed-form cell-count and grid-disk-size verification, NYC / SF / Tokyo
 / Sydney / null-island / pole-adjacent cell resolution, boundary vertex
 counts, hexagonal grid disk arithmetic, k=1 neighbor and grid-distance
