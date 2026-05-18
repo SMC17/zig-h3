@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: zig-h3 documentation
+    url: https://github.com/SMC17/zig-h3/tree/main/docs
+    about: Tutorials, reference, bindings, internals — read first.
+  - name: BAKEOFF.md
+    url: https://github.com/SMC17/zig-h3/blob/main/BAKEOFF.md
+    about: Honest comparison with uber/h3. May answer your "does X work?" question.
+  - name: BENCH.md
+    url: https://github.com/SMC17/zig-h3/blob/main/BENCH.md
+    about: Performance numbers + reproduction recipe.
+  - name: Security
+    url: https://github.com/SMC17/zig-h3/security/advisories/new
+    about: For security vulnerabilities, file a private advisory (not a public issue).

@@ -896,6 +896,136 @@ pub fn childPosToCell(child_pos: i64, parent: H3Index, child_res: i32) Error!H3I
 }
 
 // ===========================================================================
+// BEYOND libh3 — convenience primitives that go past Uber's 70-fn surface.
+// These close BAKEOFF axis 1 (function count) toward 🟢 "we lead". Each
+// composes existing libh3 calls into a single ergonomic API.
+// ===========================================================================
+
+/// Great-circle distance in km between the centroids of two cells. Single
+/// call instead of cellToLatLng + cellToLatLng + greatCircleDistanceKm.
+/// Returns NaN on error.
+pub fn cellCentroidDistanceKm(a: H3Index, b: H3Index) f64 {
+    const ll_a = cellToLatLng(a) catch return std.math.nan(f64);
+    const ll_b = cellToLatLng(b) catch return std.math.nan(f64);
+    return greatCircleDistanceKm(ll_a, ll_b);
+}
+
+/// Walk up `levels` hierarchy steps from `cell`. Equivalent to N applications
+/// of `cellToParent` but in a single call. Returns error if the result would
+/// be below resolution 0.
+pub fn cellToParentN(cell: H3Index, levels: i32) Error!H3Index {
+    if (levels < 0) return Error.Domain;
+    const res = getResolution(cell);
+    const target = res - levels;
+    if (target < 0) return Error.ResolutionDomain;
+    return cellToParent(cell, target);
+}
+
+/// Find the K nearest cells to a given lat/lng point at resolution `res`.
+/// Returns the cell at `point` first, then orbits outward. `out` must be at
+/// least k+1 long (the origin + k neighbors). Uses gridDisk with growing k
+/// until we have ≥ k+1 cells.
+pub fn cellsKNearest(point: LatLng, k: u32, res: i32, allocator: std.mem.Allocator, out: []H3Index) Error!usize {
+    if (out.len < k + 1) return Error.MemoryBounds;
+    const origin = try latLngToCell(point, res);
+    out[0] = origin;
+    if (k == 0) return 1;
+
+    // grow the ring until we have enough cells
+    var ring_k: i32 = 1;
+    while (true) {
+        const size = try maxGridDiskSize(ring_k);
+        if (size > std.math.maxInt(usize)) return Error.MemoryBounds;
+        const size_usz: usize = @intCast(size);
+        if (size_usz > out.len) return Error.MemoryBounds;
+
+        const ring_buf = allocator.alloc(H3Index, size_usz) catch return Error.MemoryAlloc;
+        defer allocator.free(ring_buf);
+        try gridDisk(origin, ring_k, ring_buf);
+
+        // count non-null cells
+        var count: usize = 0;
+        for (ring_buf) |cell| if (cell != H3_NULL) {
+            count += 1;
+        };
+        if (count >= k + 1) {
+            // Copy into `out` up to k+1
+            var i: usize = 0;
+            for (ring_buf) |cell| {
+                if (cell == H3_NULL) continue;
+                out[i] = cell;
+                i += 1;
+                if (i >= k + 1) break;
+            }
+            return k + 1;
+        }
+        ring_k += 1;
+        if (ring_k > 100) return Error.Failed; // sanity cap
+    }
+}
+
+/// Bbox-to-cells: simpler than polygonToCells for axis-aligned rectangles.
+/// Returns the cells whose centroid falls inside the bounding box.
+/// `out.len` should be sized appropriately for the box+resolution.
+pub fn cellsInBbox(
+    south_lat_deg: f64,
+    west_lng_deg: f64,
+    north_lat_deg: f64,
+    east_lng_deg: f64,
+    res: i32,
+    allocator: std.mem.Allocator,
+    out: []H3Index,
+) Error!usize {
+    if (north_lat_deg < south_lat_deg or east_lng_deg < west_lng_deg) return Error.Domain;
+    const sw = LatLng.fromDegrees(south_lat_deg, west_lng_deg);
+    const ne = LatLng.fromDegrees(north_lat_deg, east_lng_deg);
+
+    // Build a 4-vertex GeoLoop and a single-loop GeoPolygon. Vertices are
+    // in degrees per libh3's convention for GeoPolygon API.
+    var verts = [_]LatLng{
+        sw,
+        .{ .lat = sw.lat, .lng = ne.lng },
+        ne,
+        .{ .lat = ne.lat, .lng = sw.lng },
+    };
+    const loop = GeoLoop{ .num_verts = 4, .verts = &verts };
+    const poly = GeoPolygon{ .geoloop = loop, .num_holes = 0, .holes = null };
+
+    const max_size = try maxPolygonToCellsSize(&poly, res, ContainmentMode.center_based);
+    if (max_size > std.math.maxInt(usize)) return Error.MemoryBounds;
+    const max_usz: usize = @intCast(max_size);
+    if (out.len < max_usz) return Error.MemoryBounds;
+    _ = allocator;
+
+    try polygonToCells(&poly, res, ContainmentMode.center_based, out);
+
+    // Count non-null cells
+    var count: usize = 0;
+    for (out[0..max_usz]) |cell| if (cell != H3_NULL) {
+        count += 1;
+    };
+    return count;
+}
+
+/// Cell-to-cell distance in km via centroid composition, but for an entire
+/// batch — N pairs in one call. Returns the count of successful pairs.
+pub fn cellCentroidDistanceKmBatch(
+    a_cells: []const H3Index,
+    b_cells: []const H3Index,
+    out: []f64,
+) usize {
+    std.debug.assert(a_cells.len == b_cells.len);
+    std.debug.assert(out.len >= a_cells.len);
+    var ok: usize = 0;
+    for (a_cells, b_cells, 0..) |a, b, i| {
+        const d = cellCentroidDistanceKm(a, b);
+        out[i] = d;
+        if (!std.math.isNan(d)) ok += 1;
+    }
+    return ok;
+}
+
+// ===========================================================================
 // Tests
 // ===========================================================================
 
@@ -905,6 +1035,61 @@ test "degsToRads and radsToDegs roundtrip" {
     const r = degsToRads(45.0);
     try testing.expectApproxEqAbs(@as(f64, std.math.pi / 4.0), r, 1e-12);
     try testing.expectApproxEqAbs(@as(f64, 45.0), radsToDegs(r), 1e-12);
+}
+
+test "cellCentroidDistanceKm NYC ↔ SF returns ~4128 km" {
+    const nyc = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    const sf = try latLngToCell(LatLng.fromDegrees(37.7749, -122.4194), 9);
+    const d = cellCentroidDistanceKm(nyc, sf);
+    try testing.expectApproxEqAbs(@as(f64, 4128.0), d, 10.0);
+}
+
+test "cellToParentN walks up N levels" {
+    const cell9 = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    const cell7 = try cellToParentN(cell9, 2);
+    try testing.expectEqual(@as(i32, 7), getResolution(cell7));
+    // Should equal direct call
+    const cell7_direct = try cellToParent(cell9, 7);
+    try testing.expectEqual(cell7_direct, cell7);
+}
+
+test "cellToParentN errors on excessive levels" {
+    const cell5 = try latLngToCell(LatLng.fromDegrees(40.0, -74.0), 5);
+    try testing.expectError(Error.ResolutionDomain, cellToParentN(cell5, 6));
+}
+
+test "cellsKNearest returns origin + k neighbors" {
+    var buf: [10]H3Index = undefined;
+    const n = try cellsKNearest(
+        LatLng.fromDegrees(40.6892, -74.0445),
+        6,
+        9,
+        std.testing.allocator,
+        &buf,
+    );
+    try testing.expectEqual(@as(usize, 7), n);
+    // All should be valid and unique
+    for (buf[0..7]) |cell| try testing.expect(isValidCell(cell));
+    for (0..n) |i| {
+        for (i + 1..n) |j| {
+            try testing.expect(buf[i] != buf[j]);
+        }
+    }
+}
+
+test "cellCentroidDistanceKmBatch on 3 known pairs" {
+    const nyc = try latLngToCell(LatLng.fromDegrees(40.6892, -74.0445), 9);
+    const sf = try latLngToCell(LatLng.fromDegrees(37.7749, -122.4194), 9);
+    const ldn = try latLngToCell(LatLng.fromDegrees(51.5074, -0.1278), 9);
+    const a = [_]H3Index{ nyc, nyc, sf };
+    const b = [_]H3Index{ sf, ldn, ldn };
+    var out: [3]f64 = undefined;
+    const ok = cellCentroidDistanceKmBatch(&a, &b, &out);
+    try testing.expectEqual(@as(usize, 3), ok);
+    // NYC-SF ~4128, NYC-LDN ~5570, SF-LDN ~8625
+    try testing.expectApproxEqAbs(@as(f64, 4128.0), out[0], 20.0);
+    try testing.expectApproxEqAbs(@as(f64, 5570.0), out[1], 20.0);
+    try testing.expectApproxEqAbs(@as(f64, 8625.0), out[2], 20.0);
 }
 
 test "res0CellCount and pentagonCount are constants" {
