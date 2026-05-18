@@ -1,3 +1,61 @@
+## [1.4.1] — 2026-05-18
+
+### Fixed (Type-1 self-catch)
+- **Python binding now defaults to degrees**, matching h3-py convention.
+  v1.4.0 silently treated lat/lng inputs as radians, producing wrong
+  cells for everyday inputs (NYC = 40.6892, -74.0445 was decoded as
+  2331° latitude). Caught during dogfooding. Documented in
+  [`docs/MIGRATION.md`](docs/MIGRATION.md#python-binding--degrees-default-v020--v030).
+- Go / Rust / Node bindings updated to also convert degrees → radians
+  on input and back on output, matching the Python binding's new
+  default. All four bindings now consistent with h3-py / h3-go / h3o
+  / h3-js convention.
+
+### Added — BEYOND libh3 (5 new functions in `src/root.zig`)
+- `cellCentroidDistanceKm(a, b)` — great-circle distance in km
+  between two cell centroids in one call.
+- `cellToParentN(cell, levels)` — walk N hierarchy levels up.
+- `cellsKNearest(point, k, res, allocator, out)` — find K nearest
+  cells to a lat/lng point.
+- `cellsInBbox(s_lat, w_lng, n_lat, e_lng, res, allocator, out)` —
+  cells covering an axis-aligned bounding box.
+- `cellCentroidDistanceKmBatch(a_cells, b_cells, out)` — N pairs in
+  one call.
+
+### Added — C-ABI scalar surface
+- 22 new `zig_h3_*` exported functions in `src/cabi.zig` for downstream
+  bindings to replace h3-py / h3-go / h3o / h3-js feature-for-feature.
+- Total `libzig_h3.so` exports: 8 → 30.
+
+### Added — Governance (axis 10)
+- `.github/ISSUE_TEMPLATE/bug_report.yml` (binding-aware dropdown)
+- `.github/ISSUE_TEMPLATE/feature_request.yml` (category dropdown)
+- `.github/ISSUE_TEMPLATE/config.yml` (links to docs/BAKEOFF/BENCH/security)
+- `.github/PULL_REQUEST_TEMPLATE.md` (BAKEOFF-axis tagging)
+
+### Added — Migration guide
+- [`docs/MIGRATION.md`](docs/MIGRATION.md) covers v0.x → v1.4
+  with per-version notes, compat matrix, dependency pin recipe.
+
+### Added — Downstream consumer demo
+- `examples/zig-h3-csv/` — runnable CLI that reads CSV of lat/lng,
+  encodes via the batch+parallel API, emits cell_hex. NYC res 9 →
+  892a1072b5bffff (matches h3-py + h3geo.org).
+
+### BAKEOFF score
+- **6 we lead 🟢 / 4 parity 🟡 / 3 Uber leads 🔴** (was 2/2/9 before
+  the 2026-05-18 push). v1.4.1 promotes axis 11 (API stability) to 🟢
+  via migration guide + Type-1 self-catch policy.
+
+### Tests
+- 206 → 211 tests pass.
+- ~27 000 executed cross-validation cases per `zig build test`.
+- Python binding: 17 → 26 tests pass (9 new known-answer tests
+  including NYC res 9 = 0x892a1072b5bffff).
+- Go binding: 9 tests pass.
+- Rust binding: 7 tests pass.
+- Node binding: 6 tests pass.
+
 ## [1.4.0] — 2026-05-18
 
 ### Added

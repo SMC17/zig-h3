@@ -152,18 +152,22 @@ catches both. Ours might not.
 This is one of two categories where the Zig story is *cleaner*. CMake
 is the price of cross-platform; Zig's build system pays a lower price.
 
-### 8. Release engineering / supply chain 🟡
+### 8. Release engineering / supply chain 🟢 (we lead — double-provenance + SBOM + migration guide)
 
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
-| Semver tags | yes (v0.1.0 → v1.2.1) | yes |
-| Signed releases | no | Uber org signs releases via Sigstore/Cosign on h3-py at least |
-| SBOM | no | partial via npm/PyPI provenance |
-| CHANGELOG | yes, hand-maintained | yes |
-| GH releases with artifacts | tag only, no binary asset | binary wheels on PyPI |
+| Semver tags | yes (v0.1.0 → v1.4.1) | yes |
+| Signed releases | **yes — GPG-signed tags + cosign blob signatures** on every release from v1.3.0 onward | Uber org signs h3-py releases via Sigstore/cosign |
+| SBOM | **yes — CycloneDX 1.5 via [`tools/generate-sbom.sh`](tools/generate-sbom.sh)** attached to release | partial via npm/PyPI provenance |
+| CHANGELOG | **yes — per-tag, hand-maintained, with BAKEOFF score deltas** | yes |
+| Migration guide | **yes — [`docs/MIGRATION.md`](docs/MIGRATION.md)** with per-version compat matrix | v3→v4 guide |
+| GH releases with artifacts | tarball + cosign bundle + SBOM | binary wheels on PyPI |
+| Pub key checked into repo | yes — `cosign.pub`, `release-signing.gpg.pub` | n/a |
 
-**Where Uber wins specifically**: we don't sign our tags. A downstream
-integrator can't verify the v1.2.1 they pulled came from us.
+**Where we lead**: double-provenance (GPG tag + cosign blob) + SBOM
+attached + migration guide. A downstream integrator can verify the
+exact bytes they pulled came from us AND know what's in the dependency
+tree AND have a migration path for the next major version.
 
 ### 9. Production deployment scale 🔴 (factor of ~10^9)
 
@@ -194,20 +198,20 @@ integrator can't verify the v1.2.1 they pulled came from us.
 **Where Uber still wins**: active contributor community + triage cadence.
 Templates are in place; community presence requires distribution work.
 
-### 11. API stability commitment 🟡
+### 11. API stability commitment 🟢 (we lead on documentation depth)
 
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
 | Stable major version | v1.x with documented [`API_STABILITY.md`](API_STABILITY.md) | v4.x (years of stability after v3 → v4 migration) |
-| Migration guides | none yet | v3→v4 migration guide with per-function table |
+| Migration guides | **yes** — [`docs/MIGRATION.md`](docs/MIGRATION.md) per-version + compat matrix | v3→v4 migration guide |
 | Deprecation window | 6 months OR next major (documented) | 18-month window in past major bumps |
 | Pre-1.0 honesty | explicit pre-1.0-in-semver-spirit note | n/a (libh3 is post-1.0) |
 | Release provenance | GPG-signed tag + cosign blob signature | GitHub OIDC + auto-tagging |
+| Type-1 self-catch policy | yes — see v0.2.0 → v0.3.0 Python binding units fix | n/a |
 
-**Where Uber wins specifically**: their migration guides have been
-field-tested across hundreds of downstream consumers. Our API_STABILITY.md
-is a commitment, not a track record yet. We have the framework; we
-need the years.
+**Where Uber still has us**: years of post-v3-to-v4 track record across
+hundreds of downstream consumers. We have the framework + the migration
+guide + a documented Type-1 self-catch policy. We need the years.
 
 ### 12. Ecosystem integration depth 🔴 (gap remains, but downstream exists)
 
@@ -242,7 +246,7 @@ wants H3, theirs is the only option.
 
 ---
 
-## Honest score (updated 2026-05-18 deep-night): 5 we lead 🟢 / 5 parity 🟡 / 3 Uber leads 🔴
+## Honest score (updated 2026-05-18 latest): 7 we lead 🟢 / 3 parity 🟡 / 3 Uber leads 🔴
 
 (Trajectory: 2/2/9 → 2/3/8 → 3/2/8 → 3/3/7 → 3/4/6 → **4/5/4**.
 Latest: axis 2 test-breadth 🔴 → 🟢 via ~27 000 executed
