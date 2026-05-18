@@ -1273,7 +1273,9 @@ pub fn latLngToCellBatchParallel(
     thread_count: usize,
 ) !usize {
     std.debug.assert(out.len >= points.len);
-    if (thread_count <= 1 or points.len < 1024) {
+    // Single-threaded targets (WASM, freestanding) can't spawn — always
+    // run the serial path. Same fast-path for small batches or thread_count<=1.
+    if (@import("builtin").single_threaded or thread_count <= 1 or points.len < 1024) {
         return latLngToCellBatch(points, res, out);
     }
 

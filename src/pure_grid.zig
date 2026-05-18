@@ -698,7 +698,7 @@ pub fn gridDiskBatchParallel(
     thread_count: usize,
 ) !usize {
     if (out.len < origins.len * stride) return Error.MemoryBounds;
-    if (thread_count <= 1 or origins.len < 64) {
+    if (@import("builtin").single_threaded or thread_count <= 1 or origins.len < 64) {
         return gridDiskBatch(allocator, origins, k, stride, out);
     }
 
