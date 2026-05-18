@@ -1,6 +1,6 @@
 .{
     .name = .h3,
-    .version = "1.4.0",
+    .version = "1.4.1",
     .fingerprint = 0x532d92463d689dee,
     .minimum_zig_version = "0.16.0",
     .paths = .{
