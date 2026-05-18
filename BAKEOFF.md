@@ -86,19 +86,21 @@ We are *one* binding. They are an ecosystem. **The merchant-lens lesson**:
 H3-the-library is the *bottleneck* — every binding routes through libh3
 or implements it. We're an aspirational substitute, not a substrate.
 
-### 5. Documentation completeness 🔴
+### 5. Documentation completeness 🟡
 
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
 | Function-level docstrings | yes (Zig comments) | yes (Doxygen) |
 | Worked examples per function | partial (~30%) | yes (h3geo.org has per-function examples) |
-| Math derivation / spec | none | h3geo.org has the icosahedron projection, Class III rotation, IJK→hex math, all with figures |
-| Cross-binding reference | n/a | h3geo.org cross-references every binding's idiomatic name |
-| Tutorial / cookbook | none | h3geo.org/docs/tutorials |
-| API stability promise | none stated | semver + 18-month deprecation window |
+| Tutorial / cookbook | **3 tutorials** in [docs/tutorials/](docs/tutorials/) | h3geo.org/docs/tutorials |
+| Per-binding reference | [docs/bindings/](docs/bindings/) covers Python+Go+C-ABI | h3geo.org cross-references every binding's idiomatic name |
+| Internals doc | [docs/internals/](docs/internals/) — parallel-architecture + pure-Zig-vs-libh3 | n/a (we made the design notes explicit) |
+| Math derivation / spec | none yet | h3geo.org has icosahedron projection, Class III rotation, IJK→hex math, all with figures |
+| API stability promise | [API_STABILITY.md](API_STABILITY.md) semver + 6-month-or-next-major deprecation | semver + 18-month deprecation window |
 
-**Where Uber wins specifically**: h3geo.org is a Hugo/Docusaurus site
-with figures, math, tutorials, and a search index. We have a README.
+**Where Uber still leads**: math derivation pages with figures + a
+hosted docs site with search. We have markdown-only docs that render
+on GitHub. Hosted docs (mdbook/docusaurus) is a v2 follow-up.
 
 ### 6. Performance / correctness rigor 🟢 (we lead on throughput)
 
@@ -214,12 +216,25 @@ wants H3, theirs is the only option.
 
 ---
 
-## Honest score (updated 2026-05-18): 3 we lead 🟢 / 2 parity 🟡 / 8 Uber leads 🔴
+## Honest score (updated 2026-05-18, late): 3 we lead 🟢 / 3 parity 🟡 / 7 Uber leads 🔴
 
-(Was 2/2/9 → 2/3/8 → 3/2/8. Most recent: axis 6 perf-rigor 🟡 → 🟢 via
-batch+parallel API (3.6-6× faster than libh3 on hot ops). Earlier closures:
-axis 11 API stability via [API_STABILITY.md](API_STABILITY.md); axis 6
-initial closure via [BENCH.md](BENCH.md).)
+(Was 2/2/9 → 2/3/8 → 3/2/8 → 3/3/7. Most recent: axis 5 docs 🔴 → 🟡
+via [docs/](docs/) (3 tutorials + reference/batch-api + bindings/python+go+c-abi
++ internals/parallel-architecture+pure-zig-vs-libh3). Earlier closures:
+axis 6 via batch+parallel API (3.6-6× faster than libh3); axis 11 via
+[API_STABILITY.md](API_STABILITY.md); axis 6 initial via [BENCH.md](BENCH.md).)
+
+**Multi-axis attack progress toward 10× Uber across the board** (per
+operator directive 2026-05-18):
+- ✅ Axis 6 (perf): 🔴 → 🟢. Parallel batch 3.6-6× faster than libh3.
+- ✅ Axis 5 (docs): 🔴 → 🟡. 8-file docs/ tree with tutorials, reference,
+  bindings, internals.
+- 🟡 Axis 4 (bindings): 🔴 → toward 🟡. Real Python + Go bindings via
+  C-ABI shim; Rust/Node stubbed in `docs/bindings/c-abi.md`.
+- 🟡 Axis 3 (cross-platform): 6 cross-compile targets in CI + Windows
+  native + Python+Go binding CI jobs.
+- 🟢 Axis 2 (test breadth): ~27 000 executed cases per run, 15× Uber's
+  ~1 800-test baseline.
 
 **The merchant frame on this**: zig-h3 is an *idiomatic Zig surface* on
 top of libh3. It is NOT a substitute for libh3. We win Zig ergonomics
