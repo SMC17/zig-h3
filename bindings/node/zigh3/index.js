@@ -63,19 +63,29 @@ function maxGridDiskSize(k) {
     return Number(r);
 }
 
-function latlngToCellBatch(points, res, { threads = 1 } = {}) {
+const DEG_TO_RAD = Math.PI / 180;
+const RAD_TO_DEG = 180 / Math.PI;
+
+function latlngToCellBatch(points, res, { threads = 1, units = 'degrees' } = {}) {
     const n = points.length;
     if (n === 0) return new BigUint64Array(0);
+    // Convert to radians (libh3 internal) before the FFI call.
+    let working = points;
+    if (units === 'degrees') {
+        working = points.map(p => ({ lat: p.lat * DEG_TO_RAD, lng: p.lng * DEG_TO_RAD }));
+    } else if (units !== 'radians') {
+        throw new TypeError(`units must be 'degrees' or 'radians'; got ${units}`);
+    }
     const out = new BigUint64Array(n);
     if (threads > 1) {
-        fns.zig_h3_latlng_to_cell_batch_parallel(points, n, res, out, threads);
+        fns.zig_h3_latlng_to_cell_batch_parallel(working, n, res, out, threads);
     } else {
-        fns.zig_h3_latlng_to_cell_batch(points, n, res, out);
+        fns.zig_h3_latlng_to_cell_batch(working, n, res, out);
     }
     return out;
 }
 
-function cellToLatlngBatch(cells, { threads = 1 } = {}) {
+function cellToLatlngBatch(cells, { threads = 1, units = 'degrees' } = {}) {
     const n = cells.length;
     if (n === 0) return [];
     const out = new Array(n).fill({ lat: 0, lng: 0 });
@@ -83,6 +93,11 @@ function cellToLatlngBatch(cells, { threads = 1 } = {}) {
         fns.zig_h3_cell_to_latlng_batch_parallel(cells, n, out, threads);
     } else {
         fns.zig_h3_cell_to_latlng_batch(cells, n, out);
+    }
+    if (units === 'degrees') {
+        return out.map(p => ({ lat: p.lat * RAD_TO_DEG, lng: p.lng * RAD_TO_DEG }));
+    } else if (units !== 'radians') {
+        throw new TypeError(`units must be 'degrees' or 'radians'; got ${units}`);
     }
     return out;
 }

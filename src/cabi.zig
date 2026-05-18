@@ -105,7 +105,7 @@ export fn zig_h3_max_grid_disk_size(k: i32) callconv(.c) i64 {
 
 /// Library version. Returns null-terminated UTF-8 string.
 export fn zig_h3_version() callconv(.c) [*:0]const u8 {
-    return "1.4.0";
+    return "1.4.1";
 }
 
 // ============================================================================

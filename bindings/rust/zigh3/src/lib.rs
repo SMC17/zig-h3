@@ -15,11 +15,24 @@
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};
 
+const DEG_TO_RAD: f64 = std::f64::consts::PI / 180.0;
+const RAD_TO_DEG: f64 = 180.0 / std::f64::consts::PI;
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LatLng {
     pub lat: f64,
     pub lng: f64,
+}
+
+fn deg_to_rad_slice(points: &[LatLng]) -> Vec<LatLng> {
+    points
+        .iter()
+        .map(|p| LatLng {
+            lat: p.lat * DEG_TO_RAD,
+            lng: p.lng * DEG_TO_RAD,
+        })
+        .collect()
 }
 
 #[link(name = "zig_h3")]
@@ -93,24 +106,25 @@ pub fn max_grid_disk_size(k: i32) -> Option<i64> {
     }
 }
 
-/// Batch latLngToCell. Returns the count of successful conversions.
-/// Slots in `out` corresponding to non-finite lat/lng inputs are 0.
+/// Batch latLngToCell. Input lat/lng in **degrees** (matches h3-py / h3o
+/// convention). Returns count of successful conversions; failed slots = 0.
 pub fn latlng_to_cell_batch(points: &[LatLng], res: i32, out: &mut [u64]) -> usize {
     assert!(out.len() >= points.len());
     if points.is_empty() {
         return 0;
     }
+    let rad_points = deg_to_rad_slice(points);
     unsafe {
         zig_h3_latlng_to_cell_batch(
-            points.as_ptr(),
-            points.len(),
+            rad_points.as_ptr(),
+            rad_points.len(),
             res,
             out.as_mut_ptr(),
         )
     }
 }
 
-/// Parallel batch latLngToCell. `threads` workers split the input.
+/// Parallel batch latLngToCell. Input in degrees.
 pub fn latlng_to_cell_batch_parallel(
     points: &[LatLng],
     res: i32,
@@ -121,10 +135,11 @@ pub fn latlng_to_cell_batch_parallel(
     if points.is_empty() {
         return 0;
     }
+    let rad_points = deg_to_rad_slice(points);
     unsafe {
         zig_h3_latlng_to_cell_batch_parallel(
-            points.as_ptr(),
-            points.len(),
+            rad_points.as_ptr(),
+            rad_points.len(),
             res,
             out.as_mut_ptr(),
             threads,
@@ -132,18 +147,23 @@ pub fn latlng_to_cell_batch_parallel(
     }
 }
 
-/// Batch cellToLatLng. Failed decodes get `{NaN, NaN}`.
+/// Batch cellToLatLng. Output in **degrees**. Failed decodes = {NaN, NaN}.
 pub fn cell_to_latlng_batch(cells: &[u64], out: &mut [LatLng]) -> usize {
     assert!(out.len() >= cells.len());
     if cells.is_empty() {
         return 0;
     }
-    unsafe {
+    let ok = unsafe {
         zig_h3_cell_to_latlng_batch(cells.as_ptr(), cells.len(), out.as_mut_ptr())
+    };
+    for ll in out.iter_mut() {
+        ll.lat *= RAD_TO_DEG;
+        ll.lng *= RAD_TO_DEG;
     }
+    ok
 }
 
-/// Parallel batch cellToLatLng.
+/// Parallel batch cellToLatLng. Output in degrees.
 pub fn cell_to_latlng_batch_parallel(
     cells: &[u64],
     out: &mut [LatLng],
@@ -153,14 +173,19 @@ pub fn cell_to_latlng_batch_parallel(
     if cells.is_empty() {
         return 0;
     }
-    unsafe {
+    let ok = unsafe {
         zig_h3_cell_to_latlng_batch_parallel(
             cells.as_ptr(),
             cells.len(),
             out.as_mut_ptr(),
             threads,
         )
+    };
+    for ll in out.iter_mut() {
+        ll.lat *= RAD_TO_DEG;
+        ll.lng *= RAD_TO_DEG;
     }
+    ok
 }
 
 /// Batch gridDisk. `out` must have at least `origins.len() * stride`
