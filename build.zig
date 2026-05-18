@@ -59,6 +59,33 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_tests.step);
 
+    // C-ABI shim shared + static libraries — entry point for Python/Go/Node
+    // bindings that link via dlopen + ctypes / cgo / N-API.
+    const cabi_mod = b.createModule(.{
+        .root_source_file = b.path("src/cabi.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+        .pic = true,
+    });
+    cabi_mod.addConfigHeader(h3api_h);
+    cabi_mod.addIncludePath(h3c.path("src/h3lib/include"));
+    cabi_mod.linkLibrary(libh3);
+
+    const cabi_shared = b.addLibrary(.{
+        .name = "zig_h3",
+        .root_module = cabi_mod,
+        .linkage = .dynamic,
+    });
+    b.installArtifact(cabi_shared);
+
+    const cabi_static = b.addLibrary(.{
+        .name = "zig_h3_static",
+        .root_module = cabi_mod,
+        .linkage = .static,
+    });
+    b.installArtifact(cabi_static);
+
     // Example: NYC neighbors walk.
     const example_mod = b.createModule(.{
         .root_source_file = b.path("examples/nyc_neighbors.zig"),
@@ -115,6 +142,34 @@ pub fn build(b: *std.Build) void {
     doctest.step.dependOn(b.getInstallStep());
     const doctest_step = b.step("doctest", "Verify README code examples match the executable source + run cleanly");
     doctest_step.dependOn(&doctest.step);
+
+    // Coverage driver — plain executable that exercises the load-bearing
+    // public API + every reachable error path so kcov can measure
+    // src/root.zig line coverage. Per the zig-cobs v1.2.0 toolchain note,
+    // the Zig 0.16 test runner's debug-info layout doesn't surface
+    // line-coverage to the nixpkgs kcov build (no libbfd-dev); a plain
+    // exe with standard ELF+DWARF captures cleanly. Driver runs the same
+    // assertions as the test suite, in a form kcov can introspect.
+    const cov_mod = b.createModule(.{
+        .root_source_file = b.path("examples/coverage_driver.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    cov_mod.addConfigHeader(h3api_h);
+    cov_mod.addIncludePath(h3c.path("src/h3lib/include"));
+    cov_mod.linkLibrary(libh3);
+    cov_mod.addImport("h3", mod);
+    const cov_exe = b.addExecutable(.{
+        .name = "coverage-driver",
+        .root_module = cov_mod,
+        .use_llvm = pin_llvm,
+        .use_lld = pin_lld,
+    });
+    b.installArtifact(cov_exe);
+    const run_cov = b.addRunArtifact(cov_exe);
+    const cov_step = b.step("coverage-driver", "Run the kcov coverage driver");
+    cov_step.dependOn(&run_cov.step);
 
     // Benchmarks — separate step (`zig build bench`) so `zig build test`
     // stays fast. Always built in ReleaseFast so numbers reflect optimised
