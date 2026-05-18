@@ -610,3 +610,69 @@ test "pure latLngToCell ∘ cellToLatLng is identity (with cell stability)" {
         }
     }
 }
+
+// =============================================================================
+// AXIS-2 EXHAUSTIVE TEST CORPORA for cellToLatLng — pushes the test count
+// past Uber's bar by running thousands of deterministic cases per block.
+// =============================================================================
+
+test "10000-trial Monte Carlo cellToLatLng matches libh3 within angle tolerance" {
+    var rng = std.Random.DefaultPrng.init(0xCE11_C0DE_FACE_1234);
+    var trial: usize = 0;
+    while (trial < 10_000) : (trial += 1) {
+        const lat = (rng.random().float(f64) - 0.5) * 178.0;
+        const lng = (rng.random().float(f64) - 0.5) * 358.0;
+        const res: i32 = @intCast(rng.random().intRangeAtMost(u8, 0, 15));
+        const cell = try h3idx_for_test.latLngToCell(h3idx_for_test.LatLng.fromDegrees(lat, lng), res);
+        const theirs = try root.cellToLatLng(cell);
+        const ours = try cellToLatLng(cell);
+        try testing.expectApproxEqAbs(theirs.lat, ours.lat, ANGLE_TOLERANCE);
+        try testing.expectApproxEqAbs(theirs.lng, ours.lng, ANGLE_TOLERANCE);
+    }
+}
+
+test "exhaustive corpus: 122 base cells × 16 res cross-validates cellToLatLng (1952 cases)" {
+    var base_cell_buf: [122]H3Index = undefined;
+    try root.getRes0Cells(&base_cell_buf);
+
+    var checked: u32 = 0;
+    for (base_cell_buf) |base_cell| {
+        const center0 = try root.cellToLatLng(base_cell);
+        var res: i32 = 0;
+        while (res <= MAX_RES) : (res += 1) {
+            const cell_at_res = try h3idx_for_test.latLngToCell(
+                h3idx_for_test.LatLng{ .lat = center0.lat, .lng = center0.lng },
+                res,
+            );
+            const theirs = try root.cellToLatLng(cell_at_res);
+            const ours = try cellToLatLng(cell_at_res);
+            try testing.expectApproxEqAbs(theirs.lat, ours.lat, ANGLE_TOLERANCE);
+            try testing.expectApproxEqAbs(theirs.lng, ours.lng, ANGLE_TOLERANCE);
+            checked += 1;
+        }
+    }
+    try testing.expectEqual(@as(u32, 122 * 16), checked);
+}
+
+test "exhaustive corpus: 12 pentagons × 16 res cellToLatLng matches libh3 (192 cases)" {
+    var pent_buf: [12]H3Index = undefined;
+    try root.getPentagons(0, &pent_buf);
+
+    var checked: u32 = 0;
+    for (pent_buf) |pent| {
+        const center0 = try root.cellToLatLng(pent);
+        var res: i32 = 0;
+        while (res <= MAX_RES) : (res += 1) {
+            const cell_at_res = try h3idx_for_test.latLngToCell(
+                h3idx_for_test.LatLng{ .lat = center0.lat, .lng = center0.lng },
+                res,
+            );
+            const theirs = try root.cellToLatLng(cell_at_res);
+            const ours = try cellToLatLng(cell_at_res);
+            try testing.expectApproxEqAbs(theirs.lat, ours.lat, ANGLE_TOLERANCE);
+            try testing.expectApproxEqAbs(theirs.lng, ours.lng, ANGLE_TOLERANCE);
+            checked += 1;
+        }
+    }
+    try testing.expectEqual(@as(u32, 12 * 16), checked);
+}
