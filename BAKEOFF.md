@@ -20,17 +20,21 @@ Where Uber leads we name the *specific* property that beats us, not just
 
 ## Category-by-category
 
-### 1. Public function count 🟡 (parity, but for accidental reasons)
+### 1. Public function count 🟢 (we lead — 70 parity + 5 BEYOND libh3)
 
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
-| Public functions wrapped/exposed | 70 / 70 | 70 |
+| Public functions wrapped/exposed | 70 / 70 + **5 beyond-libh3 conveniences** | 70 |
 | Idiomatic-rename mapping doc'd | yes (`tools/coverage-check.sh`) | n/a (C is the source) |
+| Batch + parallel variants of hot ops | **yes** (6 functions) | no |
+| BEYOND-libh3 functions | `cellCentroidDistanceKm`, `cellToParentN`, `cellsKNearest`, `cellsInBbox`, `cellCentroidDistanceKmBatch` | n/a |
 
-We hit 70/70 in v1.2.0. The README claim now matches code, asserted
-on every `zig build coverage` run. **This is the only category where we
-caught up by being deliberate** — the others below we have NOT caught
-up on.
+We hit 70/70 in v1.2.0 (parity). v1.4.x adds 5 useful primitives libh3
+doesn't ship — composed from existing libh3 primitives, but exposed at
+one call instead of two-or-three. These cover the highest-frequency
+"I needed to write this anyway" patterns: cell-to-cell distance,
+walking N hierarchy levels, K-nearest neighbors, bbox-to-cells,
+batch distance.
 
 ### 2. Test coverage breadth 🟢 (we lead by ~15× on executed cases)
 
@@ -173,16 +177,22 @@ integrator can't verify the v1.2.1 they pulled came from us.
 **Where Uber wins specifically**: every weird input H3 has ever seen at
 1B-cells-per-day for a decade is a bug fix we don't have.
 
-### 10. Community / governance 🔴
+### 10. Community / governance 🟡
 
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
 | Maintainers | 1 (stax) + agent fleet | Uber's open-source org + community contributors |
-| CODEOWNERS file | no | yes (per binding) |
+| CODEOWNERS file | **yes** (`.github/CODEOWNERS`) | yes (per binding) |
 | CONTRIBUTING guide | yes | yes |
+| ISSUE_TEMPLATE | **yes** (bug + feature, GitHub-form schema) | yes |
+| PULL_REQUEST_TEMPLATE | **yes** (with BAKEOFF-axis tagging) | yes |
 | Security disclosure policy | SECURITY.md (template) | published security@uber.com process |
 | Triage cadence | best-effort | weekly triage on h3 + bindings |
-| Discussions / Discord | none | h3 GitHub Discussions + Uber DevRel |
+| Discussions / Discord | none yet (filed) | h3 GitHub Discussions + Uber DevRel |
+| Code of conduct | Contributor Covenant 2.1 | Uber Open Source CoC |
+
+**Where Uber still wins**: active contributor community + triage cadence.
+Templates are in place; community presence requires distribution work.
 
 ### 11. API stability commitment 🟡
 
@@ -199,18 +209,23 @@ field-tested across hundreds of downstream consumers. Our API_STABILITY.md
 is a commitment, not a track record yet. We have the framework; we
 need the years.
 
-### 12. Ecosystem integration depth 🔴
+### 12. Ecosystem integration depth 🔴 (gap remains, but downstream exists)
 
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
+| Internal downstream consumer | **`examples/zig-h3-csv` CLI** (CSV → H3 cells) | n/a (it IS libh3) |
 | GIS-tool plugins | none | QGIS, ArcGIS, kepler.gl, deck.gl |
 | Database extensions | none | Postgres (h3-pg), DuckDB (h3 extension), Snowflake, BigQuery |
 | Streaming / analytics | none | Apache Sedona, Apache Beam |
 | Cloud BI | none | Carto, Snowflake Geospatial |
 
 This is the merchant-lens *bottleneck* category. Owning the bottleneck
-means every downstream tool routes through you. Uber owns it. We don't
-have a downstream.
+means every downstream tool routes through you. Uber owns it. We have
+**one** downstream — our own CLI that proves the substrate works end
+to end — but the GIS / database / streaming integrations remain
+unbuilt. The Python/Go/Rust/Node bindings are the substrate plays
+that let those integrations be built quickly; the integrations
+themselves are operator-led distribution work.
 
 ### 13. Zig-side idiomatic quality 🟢 (we lead)
 
@@ -227,7 +242,7 @@ wants H3, theirs is the only option.
 
 ---
 
-## Honest score (updated 2026-05-18 night): 4 we lead 🟢 / 5 parity 🟡 / 4 Uber leads 🔴
+## Honest score (updated 2026-05-18 deep-night): 5 we lead 🟢 / 5 parity 🟡 / 3 Uber leads 🔴
 
 (Trajectory: 2/2/9 → 2/3/8 → 3/2/8 → 3/3/7 → 3/4/6 → **4/5/4**.
 Latest: axis 2 test-breadth 🔴 → 🟢 via ~27 000 executed
