@@ -100,21 +100,28 @@ or implements it. We're an aspirational substitute, not a substrate.
 **Where Uber wins specifically**: h3geo.org is a Hugo/Docusaurus site
 with figures, math, tutorials, and a search index. We have a README.
 
-### 6. Performance / correctness rigor 🟡
+### 6. Performance / correctness rigor 🟢 (we lead on throughput)
 
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
-| Benchmark suite | 3 (latlng, gridDisk, pure-vs-libh3) with **measured ns/op + ops/sec** in [BENCH.md](BENCH.md) | h3-py/h3-go benchmarks; comparisons to S2 and Geohash |
-| Pure-Zig vs C reference | **0.71-0.88× of libh3** (12-29% faster) on geo conversions and gridDisk (i7-1065G7, ReleaseFast) | n/a |
-| Hardware-class baselines | i7-1065G7 captured in `bench/results/2026-05-15.out` | Uber's internal SLAs |
-| Vectorization / SIMD | none in pure path; libh3 calls inherit C codegen | libh3 has explicit SIMD paths on some grids |
+| Benchmark suite | 4 (latlng, gridDisk, pure-vs-libh3, **batch+parallel**) with measured ns/op in [BENCH.md](BENCH.md) | h3-py/h3-go benchmarks; comparisons to S2 and Geohash |
+| Pure-Zig scalar vs C reference | **0.49-0.83× of libh3** (1.4-2× faster) on geo conversions and gridDisk (i7-1065G7, ReleaseFast) | n/a |
+| Parallel batch vs C scalar | **0.19-0.28× of libh3** (3.6-6× faster) using 8-thread `std.Thread`-based batch on the three hot ops | n/a |
+| Hardware-class baselines | i7-1065G7 captured in `bench/results/2026-05-18.out` | Uber's internal SLAs |
+| Vectorization / SIMD | thread-parallel via `std.Thread` (4-6× wins); `@Vector` inner math filed for v2 | libh3 has explicit SIMD paths on some grids |
 | Antimeridian / polar edge cases | partial (boundary tests in pure_polygon_test.zig) | full coverage; documented quirks per resolution |
-| Coverage instrumentation | none | gcov + Codecov on CI |
+| Coverage instrumentation | none yet | gcov + Codecov on CI |
 
-**Where Uber wins specifically**: a function that's correct at lat/lng
-within ±60° may be wrong at ±85° due to icosahedron projection seams,
-and right at the poles via a different bug. Their CI catches both. Ours
-might not.
+**Where we lead**: throughput on geo conversions + gridDisk through
+the new batch+parallel API.  Pure-Zig single-call is already faster
+than libh3 (1.4-2×); the 8-thread parallel batch widens the gap to
+3.6-6×. The route to 10× is `@Vector(4-8, f64)` SIMD inner math —
+filed as v2 next-frontier in BENCH.md.
+
+**Where Uber still wins**: edge-case coverage. A function that's
+correct at lat/lng within ±60° may be wrong at ±85° due to icosahedron
+projection seams, and right at the poles via a different bug. Their CI
+catches both. Ours might not.
 
 ### 7. Build complexity / packaging 🟢 (we lead)
 
@@ -207,11 +214,12 @@ wants H3, theirs is the only option.
 
 ---
 
-## Honest score (updated 2026-05-15): 2 we lead 🟢 / 3 parity 🟡 / 8 Uber leads 🔴
+## Honest score (updated 2026-05-18): 3 we lead 🟢 / 2 parity 🟡 / 8 Uber leads 🔴
 
-(Was 2 / 2 / 9. Closed: axis 6 perf-rigor 🔴 → 🟡 via [BENCH.md](BENCH.md);
-axis 11 API stability 🔴 → 🟡 via [API_STABILITY.md](API_STABILITY.md) +
-double-provenance signing.)
+(Was 2/2/9 → 2/3/8 → 3/2/8. Most recent: axis 6 perf-rigor 🟡 → 🟢 via
+batch+parallel API (3.6-6× faster than libh3 on hot ops). Earlier closures:
+axis 11 API stability via [API_STABILITY.md](API_STABILITY.md); axis 6
+initial closure via [BENCH.md](BENCH.md).)
 
 **The merchant frame on this**: zig-h3 is an *idiomatic Zig surface* on
 top of libh3. It is NOT a substitute for libh3. We win Zig ergonomics

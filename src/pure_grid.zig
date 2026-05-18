@@ -643,6 +643,160 @@ pub fn gridDisk(origin: H3Index, k: i32, allocator: std.mem.Allocator, out: []H3
 }
 
 // =============================================================================
+// Batch + parallel gridDisk — N independent origins, stride cells per disk
+// =============================================================================
+
+/// Batch gridDisk — single-threaded amortization. For each of `origins.len`
+/// origins, writes `stride` cells starting at `out[i*stride]`. Origins whose
+/// disk computation fails get all-zero slots. Returns count of successes.
+/// `stride` should equal `maxGridDiskSize(k)`.
+pub fn gridDiskBatch(
+    allocator: std.mem.Allocator,
+    origins: []const H3Index,
+    k: i32,
+    stride: usize,
+    out: []H3Index,
+) Error!usize {
+    if (out.len < origins.len * stride) return Error.MemoryBounds;
+    var ok_count: usize = 0;
+    for (origins, 0..) |origin, i| {
+        const slice = out[i * stride .. (i + 1) * stride];
+        gridDisk(origin, k, allocator, slice) catch {
+            @memset(slice, 0);
+            continue;
+        };
+        ok_count += 1;
+    }
+    return ok_count;
+}
+
+const GridDiskBatchWork = struct {
+    origins: []const H3Index,
+    k: i32,
+    stride: usize,
+    out: []H3Index,
+    allocator: std.mem.Allocator,
+    ok_count: usize = 0,
+    err: ?Error = null,
+};
+
+fn gridDiskBatchWorker(work: *GridDiskBatchWork) void {
+    work.ok_count = gridDiskBatch(work.allocator, work.origins, work.k, work.stride, work.out) catch |e| blk: {
+        work.err = e;
+        break :blk 0;
+    };
+}
+
+/// Parallel batch gridDisk. Splits origins across `thread_count` workers.
+/// Below 64 origins, degenerates to serial path.
+pub fn gridDiskBatchParallel(
+    allocator: std.mem.Allocator,
+    origins: []const H3Index,
+    k: i32,
+    stride: usize,
+    out: []H3Index,
+    thread_count: usize,
+) !usize {
+    if (out.len < origins.len * stride) return Error.MemoryBounds;
+    if (thread_count <= 1 or origins.len < 64) {
+        return gridDiskBatch(allocator, origins, k, stride, out);
+    }
+
+    const works = try allocator.alloc(GridDiskBatchWork, thread_count);
+    defer allocator.free(works);
+    const threads = try allocator.alloc(std.Thread, thread_count);
+    defer allocator.free(threads);
+
+    const chunk = (origins.len + thread_count - 1) / thread_count;
+    for (works, 0..) |*w, i| {
+        const start = i * chunk;
+        if (start >= origins.len) {
+            w.* = .{
+                .origins = &.{},
+                .k = k,
+                .stride = stride,
+                .out = out[0..0],
+                .allocator = allocator,
+            };
+            continue;
+        }
+        const end = @min(start + chunk, origins.len);
+        w.* = .{
+            .origins = origins[start..end],
+            .k = k,
+            .stride = stride,
+            .out = out[start * stride .. end * stride],
+            .allocator = allocator,
+        };
+    }
+    for (threads, works) |*t, *w| {
+        if (w.origins.len == 0) {
+            t.* = undefined;
+            continue;
+        }
+        t.* = try std.Thread.spawn(.{}, gridDiskBatchWorker, .{w});
+    }
+    var total: usize = 0;
+    for (threads, works) |*t, *w| {
+        if (w.origins.len == 0) continue;
+        t.join();
+        if (w.err) |e| return e;
+        total += w.ok_count;
+    }
+    return total;
+}
+
+test "gridDiskBatch matches scalar on 32 random origins (k=3)" {
+    const a = std.testing.allocator;
+    var rng = std.Random.DefaultPrng.init(0xD15C_BA7C);
+    var origins: [32]H3Index = undefined;
+    for (&origins) |*o| {
+        const lat = (rng.random().float(f64) - 0.5) * 178.0;
+        const lng = (rng.random().float(f64) - 0.5) * 358.0;
+        o.* = try h3idx.latLngToCell(h3idx.LatLng.fromDegrees(lat, lng), 9);
+    }
+    const stride: usize = @intCast(try pure.maxGridDiskSize(3));
+    var batch_out: [32 * 37]H3Index = undefined;
+    std.debug.assert(stride <= 37);
+    const ok = try gridDiskBatch(a, &origins, 3, stride, batch_out[0 .. 32 * stride]);
+    try std.testing.expectEqual(@as(usize, 32), ok);
+    for ([_]usize{ 0, 15, 31 }) |i| {
+        var scalar_out: [37]H3Index = undefined;
+        try gridDisk(origins[i], 3, a, scalar_out[0..stride]);
+        try std.testing.expectEqualSlices(
+            H3Index,
+            scalar_out[0..stride],
+            batch_out[i * stride .. (i + 1) * stride],
+        );
+    }
+}
+
+test "gridDiskBatchParallel matches scalar on 256 random origins (k=2, 4 threads)" {
+    const a = std.testing.allocator;
+    var rng = std.Random.DefaultPrng.init(0xD15C_FACE);
+    var origins: [256]H3Index = undefined;
+    for (&origins) |*o| {
+        const lat = (rng.random().float(f64) - 0.5) * 178.0;
+        const lng = (rng.random().float(f64) - 0.5) * 358.0;
+        o.* = try h3idx.latLngToCell(h3idx.LatLng.fromDegrees(lat, lng), 9);
+    }
+    const stride: usize = @intCast(try pure.maxGridDiskSize(2));
+    var batch_out: [256 * 19]H3Index = undefined;
+    std.debug.assert(stride <= 19);
+    const ok = try gridDiskBatchParallel(a, &origins, 2, stride, batch_out[0 .. 256 * stride], 4);
+    try std.testing.expectEqual(@as(usize, 256), ok);
+    for ([_]usize{ 0, 100, 255 }) |i| {
+        var scalar_out: [19]H3Index = undefined;
+        try gridDisk(origins[i], 2, a, scalar_out[0..stride]);
+        try std.testing.expectEqualSlices(
+            H3Index,
+            scalar_out[0..stride],
+            batch_out[i * stride .. (i + 1) * stride],
+        );
+    }
+}
+
+// =============================================================================
 // gridRingUnsafe — hollow ring at exact distance k
 // =============================================================================
 

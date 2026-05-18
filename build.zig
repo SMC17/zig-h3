@@ -142,6 +142,7 @@ pub fn build(b: *std.Build) void {
         .{ .name = "bench-latlng-to-cell", .path = "bench/bench_latlng_to_cell.zig" },
         .{ .name = "bench-grid-disk", .path = "bench/bench_grid_disk.zig" },
         .{ .name = "bench-pure-vs-libh3", .path = "bench/bench_pure_vs_libh3.zig" },
+        .{ .name = "bench-batch", .path = "bench/bench_batch.zig" },
     };
     for (bench_sources) |bs| {
         const bench_mod = b.createModule(.{
