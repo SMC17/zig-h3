@@ -54,6 +54,7 @@ jobs:
           - aarch64-linux-musl
           - x86_64-windows-gnu
           - aarch64-windows-gnu
+          - wasm32-wasi
     steps:
       - uses: actions/checkout@v6
 

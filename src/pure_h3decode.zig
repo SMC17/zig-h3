@@ -442,7 +442,7 @@ pub fn cellToLatLngBatchParallel(
     thread_count: usize,
 ) !usize {
     std.debug.assert(out.len >= cells.len);
-    if (thread_count <= 1 or cells.len < 1024) {
+    if (@import("builtin").single_threaded or thread_count <= 1 or cells.len < 1024) {
         return cellToLatLngBatch(cells, out);
     }
 
