@@ -1,0 +1,12 @@
+{
+  "name": "zigh3",
+  "version": "0.1.0",
+  "description": "Node binding for SMC17/zig-h3 batch+parallel API via libzig_h3.so + node-ffi-napi style FFI",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test test.js"
+  },
+  "dependencies": {
+    "koffi": "^2.10.0"
+  }
+}

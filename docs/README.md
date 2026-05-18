@@ -44,8 +44,10 @@ spatial index.
 
 - [Python](bindings/python.md): NumPy-aware, ctypes-based.
 - [Go](bindings/go.md): cgo wrapping the C-ABI shim.
+- [Rust](bindings/rust.md): raw FFI via Cargo + `#[link(name = "zig_h3")]`.
+- [Node](bindings/node.md): koffi FFI binding with BigUint64Array results.
 - [C-ABI](bindings/c-abi.md): the underlying `libzig_h3.so` surface
-  that other languages can link to.
+  that any language with C-FFI can link to.
 
 ### Internals (for contributors)
 

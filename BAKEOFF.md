@@ -67,24 +67,30 @@ our suite.
 We've only proven Linux x86_64 and one smoke-deploy to one macOS aarch64
 host. Our other targets compile (Zig says so) but no one has run them.
 
-### 4. Language binding ecosystem 🔴 (no contest)
+### 4. Language binding ecosystem 🟡
 
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
 | Native language reach | Zig | C (the library itself) |
-| Python | none | h3-py (PyPI, ~500k downloads/month) |
-| JavaScript | none | h3-js (NPM, ~1M downloads/month) |
+| Python | **zig_h3** (NumPy + ctypes via libzig_h3.so, 17 tests) | h3-py (PyPI, ~500k downloads/month) |
+| JavaScript | **zigh3** (koffi FFI, 6 tests) | h3-js (NPM, ~1M downloads/month) |
 | Java | none | h3-java (Maven Central) |
-| Go | none | h3-go (HashiCorp/uber-go) |
-| Rust | none | h3o (independent, but quasi-official) |
+| Go | **zigh3** (cgo via libzig_h3.so, 8 tests inc. 10k roundtrip) | h3-go |
+| Rust | **zigh3** (raw FFI via libzig_h3.so, 7 tests inc. 4k parallel) | h3o (community port) |
 | R | none | h3-r |
-| Postgres | none | h3-pg (extension, in production at Carto) |
+| Postgres | none | h3-pg |
 | BigQuery / Snowflake / DuckDB UDFs | none | yes (all three) |
 | Apache Sedona | none | yes |
+| C-ABI shim for arbitrary FFI | **libzig_h3.so + libzig_h3_static.a** (7 exported functions) | n/a |
 
-We are *one* binding. They are an ecosystem. **The merchant-lens lesson**:
-H3-the-library is the *bottleneck* — every binding routes through libh3
-or implements it. We're an aspirational substitute, not a substrate.
+**4 real bindings shipped** (Python, Go, Rust, Node) all wrapping the
+same `libzig_h3.so` C-ABI shim. Each ships its own test corpus + a
+roundtrip / parallel-vs-serial cross-check.
+
+**Where Uber still wins**: ecosystem reach. h3-py has 500k downloads
+per month; we're at 0 (no PyPI publish yet). Java + R + Postgres + UDF
+integrations remain unbuilt. The substrate (C-ABI shim) is in place
+to add them quickly; the published-package work is operator-led.
 
 ### 5. Documentation completeness 🟡
 
@@ -216,13 +222,14 @@ wants H3, theirs is the only option.
 
 ---
 
-## Honest score (updated 2026-05-18, late): 3 we lead 🟢 / 3 parity 🟡 / 7 Uber leads 🔴
+## Honest score (updated 2026-05-18 evening): 3 we lead 🟢 / 4 parity 🟡 / 6 Uber leads 🔴
 
-(Was 2/2/9 → 2/3/8 → 3/2/8 → 3/3/7. Most recent: axis 5 docs 🔴 → 🟡
-via [docs/](docs/) (3 tutorials + reference/batch-api + bindings/python+go+c-abi
-+ internals/parallel-architecture+pure-zig-vs-libh3). Earlier closures:
-axis 6 via batch+parallel API (3.6-6× faster than libh3); axis 11 via
-[API_STABILITY.md](API_STABILITY.md); axis 6 initial via [BENCH.md](BENCH.md).)
+(Trajectory: 2/2/9 → 2/3/8 → 3/2/8 → 3/3/7 → **3/4/6**. Latest:
+axis 4 bindings 🔴 → 🟡 via 4 real bindings (Python/Go/Rust/Node)
+all linking the libzig_h3.so C-ABI shim. Earlier closures: axis 5
+docs via [docs/](docs/) tree; axis 6 via batch+parallel API (3.6-6×
+faster than libh3); axis 11 via [API_STABILITY.md](API_STABILITY.md);
+axis 6 initial via [BENCH.md](BENCH.md).)
 
 **Multi-axis attack progress toward 10× Uber across the board** (per
 operator directive 2026-05-18):
