@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest a new function, binding, or capability
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        We prioritize features that either (a) reach parity with libh3
+        or (b) go beyond libh3 in a measurable way. Pure ergonomics
+        gets lower priority than functional gaps.
+
+  - type: textarea
+    id: feature
+    attributes:
+      label: What feature?
+      description: One-paragraph description. Include the proposed API surface if known.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - libh3 parity (function we wrap but don't expose)
+        - Beyond libh3 (function libh3 doesn't have)
+        - New binding (Java / R / Postgres / etc.)
+        - Performance (SIMD / PGO / threading)
+        - Documentation
+        - Build / CI
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: What problem does this solve? Real-world example helps.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: e.g., h3-py / h3o / Uber's roadmap

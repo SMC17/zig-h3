@@ -1,0 +1,76 @@
+name: Bug report
+description: Report a bug — wrong output, crash, build failure
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. Please give us enough to reproduce.
+        For correctness bugs (e.g., wrong cell ID), include the lat/lng,
+        resolution, and the cell ID our binding returned vs the expected
+        cell from libh3 / h3-py / h3geo.org.
+
+  - type: input
+    id: zig-version
+    attributes:
+      label: Zig version
+      description: Output of `zig version`
+      placeholder: "0.16.0"
+    validations:
+      required: true
+
+  - type: input
+    id: zig-h3-version
+    attributes:
+      label: zig-h3 version
+      description: Git tag or commit hash
+      placeholder: "v1.4.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: language
+    attributes:
+      label: Which binding / language?
+      options:
+        - Zig (direct)
+        - Python (zig_h3)
+        - Go (zigh3)
+        - Rust (zigh3)
+        - Node (zigh3)
+        - C-ABI (libzig_h3.so) directly
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Reproducer
+      description: Minimal code that triggers the bug
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected output
+      description: What should happen? Cite libh3 / h3-py / h3geo.org if a known-answer mismatch.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual output
+      description: What did happen?
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: "Linux x86_64 / macOS arm64 / Windows x86_64"
+    validations:
+      required: true

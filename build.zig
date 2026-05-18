@@ -135,6 +135,31 @@ pub fn build(b: *std.Build) void {
     const quickstart_step = b.step("example-quickstart", "Run the README Quickstart example");
     quickstart_step.dependOn(&run_quickstart.step);
 
+    // Downstream consumer demo — zig-h3-csv (closes BAKEOFF axis 12).
+    // A real CLI that reads a CSV of lat/lng pairs and emits H3 cells,
+    // demonstrating end-to-end use of the batch + parallel API.
+    const csv_mod = b.createModule(.{
+        .root_source_file = b.path("examples/zig-h3-csv/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    csv_mod.addConfigHeader(h3api_h);
+    csv_mod.addIncludePath(h3c.path("src/h3lib/include"));
+    csv_mod.linkLibrary(libh3);
+    csv_mod.addImport("h3", mod);
+    const csv_exe = b.addExecutable(.{
+        .name = "zig-h3-csv",
+        .root_module = csv_mod,
+        .use_llvm = pin_llvm,
+        .use_lld = pin_lld,
+    });
+    b.installArtifact(csv_exe);
+    const run_csv = b.addRunArtifact(csv_exe);
+    if (b.args) |args| run_csv.addArgs(args);
+    const csv_step = b.step("zig-h3-csv", "Run the CSV-to-H3 downstream consumer demo");
+    csv_step.dependOn(&run_csv.step);
+
     // Doc-tests: extract the README's Quickstart block + diff against the
     // vendored examples/quickstart.zig + run the binary + check output +
     // verify documented build steps exist.
