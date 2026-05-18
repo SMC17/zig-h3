@@ -196,6 +196,32 @@ pub fn build(b: *std.Build) void {
     const cov_step = b.step("coverage-driver", "Run the kcov coverage driver");
     cov_step.dependOn(&run_cov.step);
 
+    // h3py-diff — second-reference differential against h3-py. zig-h3's
+    // primary cross-validation runs against the vendored libh3 C source
+    // (first reference); this binary feeds a fixed query set through the
+    // zig-h3 wrapper and compares the result to h3-py's output. Confirms
+    // that wrapper-level marshalling matches what external consumers see.
+    const h3py_mod = b.createModule(.{
+        .root_source_file = b.path("tests/h3py/h3py_diff.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    h3py_mod.addConfigHeader(h3api_h);
+    h3py_mod.addIncludePath(h3c.path("src/h3lib/include"));
+    h3py_mod.linkLibrary(libh3);
+    h3py_mod.addImport("h3", mod);
+    const h3py_exe = b.addExecutable(.{
+        .name = "h3py-diff",
+        .root_module = h3py_mod,
+        .use_llvm = pin_llvm,
+        .use_lld = pin_lld,
+    });
+    b.installArtifact(h3py_exe);
+    const run_h3py = b.addRunArtifact(h3py_exe);
+    const h3py_step = b.step("h3py-diff", "Run the h3-py second-reference differential");
+    h3py_step.dependOn(&run_h3py.step);
+
     // Benchmarks — separate step (`zig build bench`) so `zig build test`
     // stays fast. Always built in ReleaseFast so numbers reflect optimised
     // codegen regardless of the user's top-level optimize flag. The bench
