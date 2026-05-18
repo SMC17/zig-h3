@@ -1,0 +1,13 @@
+[package]
+name = "zigh3"
+version = "0.1.0"
+edition = "2021"
+description = "Rust binding for SMC17/zig-h3 batch+parallel API via libzig_h3"
+license = "Apache-2.0"
+
+[lib]
+name = "zigh3"
+path = "src/lib.rs"
+
+[build-dependencies]
+# no bindgen — we hand-declare the small surface for compile-speed
