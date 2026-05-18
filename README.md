@@ -22,13 +22,29 @@ path API. **Line coverage on `src/root.zig`: 94.40% (219/232 lines)**
 measured by `tools/coverage.sh` (kcov against a dedicated
 `coverage-driver` executable; reproducible in CI on every push).
 
-**New in v1.4.0**: batch + parallel API (`latLngToCellBatch`,
-`cellToLatLngBatch`, `gridDiskBatch` and `*Parallel` variants).
-8-thread parallel batch is **3.6-6× faster than libh3 scalar** on
-geo-conversions and gridDisk (see [BENCH.md](BENCH.md)). Plus
-real Python binding via `libzig_h3.so` + ctypes + NumPy
-([bindings/python/](bindings/python/)) and Go binding via cgo
-([bindings/go/zigh3/](bindings/go/zigh3/)).
+**New in v1.4.x**:
+- **Batch + parallel API** (6 new functions: `latLngToCellBatch`,
+  `cellToLatLngBatch`, `gridDiskBatch` and `*Parallel` variants).
+  8-thread parallel batch is **3.6-6× faster than libh3 scalar**
+  (see [BENCH.md](BENCH.md)).
+- **5 BEYOND-libh3 functions**: `cellCentroidDistanceKm`,
+  `cellToParentN`, `cellsKNearest`, `cellsInBbox`,
+  `cellCentroidDistanceKmBatch` — composing libh3 primitives into
+  one ergonomic call.
+- **4 real language bindings** via the `libzig_h3.so` C-ABI shim
+  ([Python](bindings/python/), [Go](bindings/go/zigh3/),
+  [Rust](bindings/rust/zigh3/), [Node](bindings/node/zigh3/)).
+  48 cross-language tests pass.
+- **27 000+ executed cross-validation cases per `zig build test`**
+  (15× Uber's published unit-test count).
+- **Downstream consumer demo**: [`examples/zig-h3-csv/`](examples/zig-h3-csv/)
+  — a runnable CLI that reads CSV of lat/lng and emits H3 cells.
+
+[BAKEOFF.md](BAKEOFF.md) tracks the honest score vs uber/h3:
+**5 we lead 🟢 / 5 parity 🟡 / 3 Uber leads 🔴**
+(was 2/2/9 before the 2026-05-18 push). The 3 remaining 🔴 axes
+(production scale, ecosystem depth, governance) require distribution
+work to close, not engineering.
 
 - Lat/lng ↔ cell conversions
 - Cell boundary geometry
@@ -58,7 +74,7 @@ real Python binding via `libzig_h3.so` + ctypes + NumPy
 - Resolution metadata (`getNumCells`, `getRes0Cells`, `getPentagons`,
   `res0CellCount`, `pentagonCount`)
 
-**206 tests pass** with **~27,000 executed cross-validation cases per
+**211 tests pass** with **~27,000 executed cross-validation cases per
 run** through deterministic property corpora (122 base cells × 16
 resolutions sweep, 12 pentagons × 16 resolutions sweep, 100-landmark
 × 16 resolutions sweep, 10 000-trial Monte Carlo on both forward +
