@@ -1,0 +1,87 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:8bf04e85-2c68-4435-bf0e-25e2fe8559ae",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-05-19T20:20:03Z",
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "group": "stax",
+          "name": "zig-h3/tools/generate-sbom.sh",
+          "version": "1.1.0",
+          "supplier": { "name": "stax" }
+        }
+      ]
+    },
+    "component": {
+      "type": "library",
+      "bom-ref": "pkg:github/SMC17/zig-h3@1.4.1",
+      "name": "zig-h3",
+      "version": "1.4.1",
+      "description": "Idiomatic Zig bindings + pure-Zig reimplementation of Uber's H3 v4 hexagonal spatial index, with batch+parallel API and C-ABI shim for Python/Go/Rust/Node bindings.",
+      "licenses": [
+        { "license": { "id": "Apache-2.0" } }
+      ],
+      "purl": "pkg:github/SMC17/zig-h3@1.4.1",
+      "externalReferences": [
+        { "type": "vcs", "url": "https://github.com/SMC17/zig-h3" },
+        { "type": "documentation", "url": "https://github.com/SMC17/zig-h3/tree/main/docs" },
+        { "type": "release-notes", "url": "https://github.com/SMC17/zig-h3/releases" }
+      ],
+      "properties": [
+        { "name": "zig:version-required", "value": "0.16.0" },
+        { "name": "git:sha", "value": "0494edcd7f7f2166cc83451c6695ae7111591896" },
+        { "name": "bakeoff:score", "value": "6-lead / 4-parity / 3-uber-leads (2026-05-18)" }
+      ]
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "pkg:github/uber/h3@v4.1.0",
+      "name": "libh3",
+      "version": "v4.1.0",
+      "description": "Uber's H3 v4 hexagonal hierarchical spatial index — vendored as the C reference + ABI source of truth.",
+      "licenses": [
+        { "license": { "id": "Apache-2.0" } }
+      ],
+      "purl": "pkg:github/uber/h3@v4.1.0?download_url=https%3A%2F%2Fgithub.com%2Fuber%2Fh3%2Farchive%2Frefs%2Ftags%2Fv4.1.0.tar.gz&checksum=sha256:ec99f1f5974846bde64f4513cf8d2ea1b8d172d2218ab41803bf6a63532272bc",
+      "hashes": [
+        { "alg": "SHA-256", "content": "ec99f1f5974846bde64f4513cf8d2ea1b8d172d2218ab41803bf6a63532272bc" }
+      ],
+      "scope": "required",
+      "externalReferences": [
+        { "type": "vcs", "url": "https://github.com/uber/h3" },
+        { "type": "distribution", "url": "https://github.com/uber/h3/archive/refs/tags/v4.1.0.tar.gz" }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:generic/zig-stdlib@0.16.0",
+      "name": "zig-stdlib",
+      "version": "0.16.0",
+      "description": "Zig 0.16.0 standard library (std.json, std.Thread, std.heap.c_allocator, etc.)",
+      "licenses": [
+        { "license": { "id": "MIT" } }
+      ],
+      "purl": "pkg:generic/zig-stdlib@0.16.0?download_url=https%3A%2F%2Fziglang.org%2Fdownload%2F0.16.0%2Fzig-0.16.0.tar.xz",
+      "scope": "required",
+      "externalReferences": [
+        { "type": "distribution", "url": "https://ziglang.org/download/0.16.0/zig-0.16.0.tar.xz" },
+        { "type": "vcs", "url": "https://github.com/ziglang/zig" }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pkg:github/SMC17/zig-h3@1.4.1",
+      "dependsOn": [
+        "pkg:github/uber/h3@v4.1.0",
+        "pkg:generic/zig-stdlib@0.16.0"
+      ]
+    }
+  ]
+}
