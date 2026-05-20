@@ -164,17 +164,29 @@ is the price of cross-platform; Zig's build system pays a lower price.
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
 | Semver tags | yes (v0.1.0 → v1.4.1) | yes |
-| Signed releases | **yes — GPG-signed tags + cosign blob signatures** on every release from v1.3.0 onward | Uber org signs h3-py releases via Sigstore/cosign |
+| Signed releases | **yes — GPG-signed tags** on every release from v1.3.0 onward; cosign blob signing tracked as future work | Uber org signs h3-py releases via Sigstore/cosign |
 | SBOM | **yes — CycloneDX 1.5 via [`tools/generate-sbom.sh`](tools/generate-sbom.sh)** attached to release | partial via npm/PyPI provenance |
+| OpenTimestamps anchor | **yes — Bitcoin Merkle anchor via [`ecosystem/onchain/attest.sh`](ecosystem/onchain/attest.sh)** attached as `.ots` | none |
 | CHANGELOG | **yes — per-tag, hand-maintained, with BAKEOFF score deltas** | yes |
 | Migration guide | **yes — [`docs/MIGRATION.md`](docs/MIGRATION.md)** with per-version compat matrix | v3→v4 guide |
-| GH releases with artifacts | tarball + cosign bundle + SBOM | binary wheels on PyPI |
-| Pub key checked into repo | yes — `cosign.pub`, `release-signing.gpg.pub` | n/a |
+| GH releases with artifacts | tarball + SBOM + OTS + git bundle | binary wheels on PyPI |
+| Pub key checked into repo | `release-signing.gpg.pub` (cosign.pub pending) | n/a |
 
-**Where we lead**: double-provenance (GPG tag + cosign blob) + SBOM
-attached + migration guide. A downstream integrator can verify the
-exact bytes they pulled came from us AND know what's in the dependency
-tree AND have a migration path for the next major version.
+**Where we lead**: GPG-signed tag + SBOM attached + OTS Bitcoin
+anchor + migration guide. A downstream integrator can verify the
+exact bytes they pulled came from us, know what's in the dependency
+tree, prove the tarball existed on a specific date without trusting
+any third party, and have a migration path for the next major
+version. Cosign-blob signing is on the roadmap to close the gap
+with the h3-py SLSA-L3-equivalent posture.
+
+> **Honest-substrate correction (2026-05-19)**: earlier drafts of
+> this table claimed "double-provenance (GPG + cosign)" as live.
+> Cosign integration was not implemented; `cosign.pub` did not
+> exist. The over-claim was caught by a substrate audit and the
+> table corrected. Real provenance today is GPG tag + SBOM + OTS
+> anchor (three layers, not four). Cosign is the next substrate
+> shipment in this category.
 
 ### 9. Production deployment scale 🔴 (factor of ~10^9)
 
@@ -213,7 +225,7 @@ Templates are in place; community presence requires distribution work.
 | Migration guides | **yes** — [`docs/MIGRATION.md`](docs/MIGRATION.md) per-version + compat matrix | v3→v4 migration guide |
 | Deprecation window | 6 months OR next major (documented) | 18-month window in past major bumps |
 | Pre-1.0 honesty | explicit pre-1.0-in-semver-spirit note | n/a (libh3 is post-1.0) |
-| Release provenance | GPG-signed tag + cosign blob signature | GitHub OIDC + auto-tagging |
+| Release provenance | GPG-signed tag + SBOM + OTS anchor (cosign pending) | GitHub OIDC + auto-tagging |
 | Type-1 self-catch policy | yes — see v0.2.0 → v0.3.0 Python binding units fix | n/a |
 
 **Where Uber still has us**: years of post-v3-to-v4 track record across

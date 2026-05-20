@@ -75,22 +75,24 @@ If a stable surface needs to change:
 
 ## Verification
 
-Releases are double-provenance signed:
+Releases carry the following provenance:
 
 - **GPG-signed git tags** — fingerprint
   `079261B06444C6A410B3BE363CFCB60243028886`. Verify with
   `git tag -v v1.X.Y`. Public key at
   [`release-signing.gpg.pub`](release-signing.gpg.pub).
-- **Cosign blob signatures** on release tarballs. Verify with:
+- **CycloneDX 1.5 SBOM** attached as `zig-h3-v1.X.Y.sbom.cdx.json`.
+- **OpenTimestamps Bitcoin Merkle anchor** on the release tarball,
+  attached as `zig-h3-v1.X.Y-attest.tar.gz.ots`. Verify with
+  `ots verify zig-h3-v1.X.Y-attest.tar.gz.ots`.
+- **Git bundle** (`zig-h3-v1.X.Y.bundle`) attached for offline
+  mirroring of the full release-tagged history.
 
-```sh
-cosign verify-blob \
-  --key cosign.pub \
-  --bundle zig-h3-v1.X.Y.bundle \
-  zig-h3-v1.X.Y.tar.gz
-```
-
-Public key at [`cosign.pub`](cosign.pub).
+Cosign blob signing is **planned but not yet implemented** for the
+v1.x release line. Earlier drafts of these docs referenced cosign
+as if shipped; that was an over-claim. The substrate fix (real
+cosign integration via Sigstore + a `cosign.pub` in the repo) is
+tracked as future work.
 
 ## Per-release scope
 
