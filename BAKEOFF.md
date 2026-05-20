@@ -164,29 +164,25 @@ is the price of cross-platform; Zig's build system pays a lower price.
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
 | Semver tags | yes (v0.1.0 → v1.4.1) | yes |
-| Signed releases | **yes — GPG-signed tags** on every release from v1.3.0 onward; cosign blob signing tracked as future work | Uber org signs h3-py releases via Sigstore/cosign |
+| Signed releases | **yes — GPG-signed tags + cosign blob signatures** (cosign live as of v1.5.0+) | Uber org signs h3-py releases via Sigstore/cosign |
 | SBOM | **yes — CycloneDX 1.5 via [`tools/generate-sbom.sh`](tools/generate-sbom.sh)** attached to release | partial via npm/PyPI provenance |
 | OpenTimestamps anchor | **yes — Bitcoin Merkle anchor via [`ecosystem/onchain/attest.sh`](ecosystem/onchain/attest.sh)** attached as `.ots` | none |
 | CHANGELOG | **yes — per-tag, hand-maintained, with BAKEOFF score deltas** | yes |
 | Migration guide | **yes — [`docs/MIGRATION.md`](docs/MIGRATION.md)** with per-version compat matrix | v3→v4 guide |
-| GH releases with artifacts | tarball + SBOM + OTS + git bundle | binary wheels on PyPI |
-| Pub key checked into repo | `release-signing.gpg.pub` (cosign.pub pending) | n/a |
+| GH releases with artifacts | tarball + cosign-bundle + SBOM + OTS + git bundle | binary wheels on PyPI |
+| Pub key checked into repo | `release-signing.gpg.pub` + `cosign.pub` | n/a |
 
-**Where we lead**: GPG-signed tag + SBOM attached + OTS Bitcoin
-anchor + migration guide. A downstream integrator can verify the
-exact bytes they pulled came from us, know what's in the dependency
-tree, prove the tarball existed on a specific date without trusting
-any third party, and have a migration path for the next major
-version. Cosign-blob signing is on the roadmap to close the gap
-with the h3-py SLSA-L3-equivalent posture.
+**Where we lead**: GPG-signed tag + cosign-blob signature + SBOM
+attached + OTS Bitcoin anchor + migration guide. A downstream
+integrator gets four independent layers of provenance verification.
 
-> **Honest-substrate correction (2026-05-19)**: earlier drafts of
-> this table claimed "double-provenance (GPG + cosign)" as live.
-> Cosign integration was not implemented; `cosign.pub` did not
-> exist. The over-claim was caught by a substrate audit and the
-> table corrected. Real provenance today is GPG tag + SBOM + OTS
-> anchor (three layers, not four). Cosign is the next substrate
-> shipment in this category.
+> **Audit history (2026-05-19 → 2026-05-20)**: earlier drafts of
+> this table claimed cosign-blob signing as live when it hadn't
+> been implemented. The Type-I over-claim was caught + retracted
+> on 2026-05-19, and the substrate (cosign keypair + signing helper
+> + sovereign signing-config) shipped on 2026-05-20. The claim is
+> now backed by `ecosystem/onchain/cosign-attest.sh` producing
+> verifiable `.cosign-bundle` artifacts.
 
 ### 9. Production deployment scale 🔴 (factor of ~10^9)
 

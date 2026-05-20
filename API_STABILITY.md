@@ -88,11 +88,22 @@ Releases carry the following provenance:
 - **Git bundle** (`zig-h3-v1.X.Y.bundle`) attached for offline
   mirroring of the full release-tagged history.
 
-Cosign blob signing is **planned but not yet implemented** for the
-v1.x release line. Earlier drafts of these docs referenced cosign
-as if shipped; that was an over-claim. The substrate fix (real
-cosign integration via Sigstore + a `cosign.pub` in the repo) is
-tracked as future work.
+- **Cosign blob signature** on release tarballs (v1.5.0+). Verify:
+
+  ```sh
+  cosign verify-blob \
+    --key cosign.pub \
+    --bundle zig-h3-vX.Y.Z.tar.gz.cosign-bundle \
+    --insecure-ignore-tlog=true \
+    zig-h3-vX.Y.Z.tar.gz
+  ```
+
+  Public key checked into the repo at [`cosign.pub`](cosign.pub).
+  Signing helper at
+  [`ecosystem/onchain/cosign-attest.sh`](ecosystem/onchain/cosign-attest.sh).
+  The `--insecure-ignore-tlog` flag is required because we sign
+  with a sovereign-only signing-config (no public Sigstore rekor
+  transparency log dependency).
 
 ## Per-release scope
 
