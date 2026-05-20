@@ -46,24 +46,26 @@ calendars are free and the protocol's design means a single Bitcoin
 transaction per ~hour amortizes the cost across thousands of
 attestations.
 
-### Triple-provenance on every v1.4+ release
+### Quad-provenance on every v1.5+ release
 
 | Layer | What it proves | Mechanism |
 |-------|----------------|-----------|
 | GPG tag | "stax signed this tag" | fingerprint `079261B06444C6A410B3BE363CFCB60243028886` |
+| Cosign blob | "stax signed this tarball" | Sigstore ECDSA via `cosign.pub` in repo; sovereign signing-config (no rekor) |
 | SBOM | "these are the components" | CycloneDX 1.5 listing libh3 + zig-stdlib + zig-h3 |
 | OpenTimestamps | "this tarball existed by date X" | Bitcoin Merkle anchor (~12h finality) |
 
-A downstream supply-chain auditor can verify all three independently.
+A downstream supply-chain auditor can verify all four independently.
 A git bundle (`.bundle`) is also attached for offline-mirrorable
 release-tagged history.
 
-> **Honest-substrate note (2026-05-19)**: an earlier draft of this
-> table included a "Cosign blob" row. The Sigstore/cosign signing
-> step was not actually implemented in release tooling and no
-> `cosign.pub` exists. The `.bundle` GH release asset is a git
-> bundle, not a cosign bundle. Cosign integration is tracked as
-> future work; docs corrected to drop the over-claim.
+> **Audit history (2026-05-19 → 2026-05-20)**: an earlier draft of
+> this table included Cosign as if shipped, when in fact no signing
+> tooling existed. The over-claim was caught by substrate audit, the
+> claim was retracted, and now (2026-05-20) the cosign tooling has
+> been implemented: `ecosystem/onchain/cosign-attest.sh` produces
+> the `.cosign-bundle` artifact, and `cosign.pub` is checked into
+> the repo. The table is honest again — four layers, all real.
 
 ## 2. Wasm-on-chain (CosmWasm / NEAR / Internet Computer / Substrate)
 
