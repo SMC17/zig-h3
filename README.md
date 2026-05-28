@@ -1,6 +1,12 @@
 # zig-h3
 
-[![CI](https://github.com/SMC17/zig-h3/actions/workflows/ci.yml/badge.svg)](https://github.com/SMC17/zig-h3/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/SMC17/zig-h3?display_name=tag&sort=semver)](https://github.com/SMC17/zig-h3/releases) [![License](https://img.shields.io/github/license/SMC17/zig-h3)](LICENSE)
+> H3 hexagonal grid bindings for Zig 0.16. 211/211 tests including 10,392 property trials across 16 resolutions + 443 pentagons. Cross-validated against libh3 v4.1.0.
+
+[![CI](https://github.com/SMC17/zig-h3/actions/workflows/ci.yml/badge.svg)](https://github.com/SMC17/zig-h3/actions)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL_3.0-blue.svg)](LICENSE)
+[![Zig: 0.16](https://img.shields.io/badge/Zig-0.16-orange.svg)](https://ziglang.org/)
+[![Tests: 211/211](https://img.shields.io/badge/tests-211%2F211-success.svg)](#tests)
+[![Property trials: 10,392](https://img.shields.io/badge/property%20trials-10%2C392-blue.svg)](#tests)
 
 > **Docs**: [tutorials](docs/tutorials/) · [reference](docs/reference/) ·
 > [bindings](docs/bindings/) · [internals](docs/internals/). Or jump to
@@ -12,6 +18,27 @@ transparently via Zig's package manager. Build it from source the first
 time, cached thereafter.
 
 [h3-site]: https://h3geo.org/
+
+## Architecture
+
+```mermaid
+flowchart LR
+    A[lat/lng] --> B[zig-h3 latLngToCell]
+    B --> C[H3 index]
+    C --> D[cellToLatLng]
+    C --> E[gridDisk neighbors]
+    C --> F[polygonToCells]
+    C --> G[parent/children resolution]
+    H[Downstream consumers] -.-> C
+    H -.includes.-> I[oceanman<br/>cable network analysis]
+    click I "https://github.com/SMC17/oceanman"
+```
+
+## Downstream consumers
+
+- [`SMC17/oceanman`](https://github.com/SMC17/oceanman) — submarine
+  cable knowledge base; uses `zig-h3` for cable-landing geospatial
+  indexing alongside `zig-graph` for chokepoint analysis.
 
 ## Status
 
@@ -364,13 +391,15 @@ returns a `CellBoundary` directly (no copy through a Zig-only struct);
 `comptime` assertions in `root.zig` verify layout parity with the C
 struct.
 
-## Licensing
+## License
 
-This wrapper is licensed under MIT. The underlying `libh3` library is
-Apache License 2.0 (Copyright Uber Technologies, Inc.) and is fetched
-from upstream at build time — its license is preserved in the downloaded
-archive and reproduced in `LICENSE-H3-APACHE-2.0` in this repository for
-reference.
+This wrapper is licensed under **AGPL-3.0-or-later**; see [`LICENSE`](LICENSE).
+The underlying `libh3` library is Apache License 2.0 (Copyright Uber
+Technologies, Inc.) and is fetched from upstream at build time — its
+license is preserved in the downloaded archive and reproduced in
+[`LICENSE-H3-APACHE-2.0`](LICENSE-H3-APACHE-2.0) for reference. AGPL
+governs the Zig wrapper code; Apache-2.0 governs the libh3 C source it
+links.
 
 ## Tests
 
