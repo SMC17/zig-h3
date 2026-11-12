@@ -31,14 +31,13 @@ flowchart LR
     C --> G[parent/children resolution]
     H[Downstream consumers] -.-> C
     H -.includes.-> I[oceanman<br/>cable network analysis]
-    click I "https://github.com/SMC17/oceanman"
 ```
 
 ## Downstream consumers
 
-- [`SMC17/oceanman`](https://github.com/SMC17/oceanman) — submarine
-  cable knowledge base; uses `zig-h3` for cable-landing geospatial
-  indexing alongside `zig-graph` for chokepoint analysis.
+- `oceanman`: submarine-cable knowledge base; uses `zig-h3` for cable-landing
+  geospatial indexing alongside `zig-graph` for chokepoint analysis
+  (publishing soon).
 
 ## Status
 
@@ -507,12 +506,14 @@ run-to-run variance is ±30% on the tighter rows (the ratio shape is
 stable, the absolute ns numbers fluctuate). Bring your own data on a
 quiet machine for steady measurements.
 
-## Related Zig libraries by the same author
+## Related work by the same author
 
-- [**SMC17/sme-zig**](https://github.com/SMC17/sme-zig) — Structure-Mapping Engine reproduction (cognitive-architecture lane)
-- [**SMC17/safetensors-zig**](https://github.com/SMC17/safetensors-zig) — HuggingFace safetensors reader
-- [**SMC17/faiss-zig**](https://github.com/SMC17/faiss-zig) — vector similarity (Flat + HNSW + IVFFlat + IVFPQ)
-- [**SMC17/vllm-zig**](https://github.com/SMC17/vllm-zig) — LLM serving substrate (TinyLlama end-to-end)
-- [**SMC17/tokenizers-zig**](https://github.com/SMC17/tokenizers-zig) — HuggingFace tokenizers (BPE / WordPiece / Unigram)
+Public now:
 
-See [github.com/SMC17](https://github.com/SMC17) for more.
+- [**logic-zig**](https://github.com/SMC17/logic-zig): an executable museum of logic and a fail-closed trust kernel
+- [**method-wagwan**](https://github.com/SMC17/method-wagwan): walk-forward replay engine for code; zig-h3 is its first replay target
+- [**zag**](https://github.com/SMC17/zag): terminal, block model, and agent runtime in one Zig program
+
+Publishing one at a time after a clean clone passes: `zig-graph`, `zkdb`,
+`tokenizers-zig`, `safetensors-zig`, `faiss-zig`. See
+[github.com/SMC17](https://github.com/SMC17).
