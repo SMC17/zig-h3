@@ -102,7 +102,7 @@ Releases carry the following provenance:
   Signing helper at
   [`ecosystem/onchain/cosign-attest.sh`](ecosystem/onchain/cosign-attest.sh).
   The `--insecure-ignore-tlog` flag is required because we sign
-  with a sovereign-only signing-config (no public Sigstore rekor
+  with a self-hosted signing config (no public Sigstore Rekor
   transparency log dependency).
 
 ## Per-release scope
@@ -110,7 +110,7 @@ Releases carry the following provenance:
 | Version | Substrate gates                                      | Added                                                |
 |---------|------------------------------------------------------|------------------------------------------------------|
 | v0.1.0  | initial port; 14 H3 v4 functions                     | first release                                        |
-| v1.0.0  | production-grade hygiene milestone                   | LICENSE / SECURITY / CONTRIBUTING / CODE_OF_CONDUCT  |
+| v1.0.0  | project policies milestone                           | LICENSE / SECURITY / CONTRIBUTING / CODE_OF_CONDUCT  |
 | v1.1.0  | directed-edge + vertex + polygon + local-IJ + path + compact | 64 of 70 public functions                  |
 | v1.2.0  | wrap last 6 functions; 70/70 coverage                | coverage-check.sh regression guard                   |
 | v1.3.0  | property invariants + polygon round-trip + mutation harness | BAKEOFF.md + 190/190 tests + double-provenance |

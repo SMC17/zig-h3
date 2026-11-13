@@ -20,14 +20,14 @@ Where Uber leads we name the *specific* property that beats us, not just
 
 ## Category-by-category
 
-### 1. Public function count 🟢 (we lead — 70 parity + 5 BEYOND libh3)
+### 1. Public function count 🟢 (we lead: 70 at parity plus 5 composite functions)
 
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
 | Public functions wrapped/exposed | 70 / 70 + **5 beyond-libh3 conveniences** | 70 |
 | Idiomatic-rename mapping doc'd | yes (`tools/coverage-check.sh`) | n/a (C is the source) |
 | Batch + parallel variants of hot ops | **yes** (6 functions) | no |
-| BEYOND-libh3 functions | `cellCentroidDistanceKm`, `cellToParentN`, `cellsKNearest`, `cellsInBbox`, `cellCentroidDistanceKmBatch` | n/a |
+| Composite functions beyond libh3 | `cellCentroidDistanceKm`, `cellToParentN`, `cellsKNearest`, `cellsInBbox`, `cellCentroidDistanceKmBatch` | n/a |
 
 We hit 70/70 in v1.2.0 (parity). v1.4.x adds 5 useful primitives libh3
 doesn't ship — composed from existing libh3 primitives, but exposed at
@@ -129,8 +129,8 @@ we lack the math-figure pages — filed for v2.x.
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
 | Benchmark suite | 4 (latlng, gridDisk, pure-vs-libh3, **batch+parallel**) with measured ns/op in [BENCH.md](BENCH.md) | h3-py/h3-go benchmarks; comparisons to S2 and Geohash |
-| Pure-Zig scalar vs C reference | **0.49-0.83× of libh3** (1.4-2× faster) on geo conversions and gridDisk (i7-1065G7, ReleaseFast) | n/a |
-| Parallel batch vs C scalar | **0.19-0.28× of libh3** (3.6-6× faster) using 8-thread `std.Thread`-based batch on the three hot ops | n/a |
+| Pure-Zig scalar vs C reference, same thread count | 0.92-0.95× of libh3's time on Apple M2 Max; 0.71-0.88× on i7-1065G7 (ReleaseFast; [BENCH.md](BENCH.md)) | n/a |
+| 8-thread batch vs one libh3 thread | 3.6-7× the throughput. This measures scaling across threads, not a faster algorithm | n/a |
 | Hardware-class baselines | i7-1065G7 captured in `bench/results/2026-05-18.out` | Uber's internal SLAs |
 | Vectorization / SIMD | thread-parallel via `std.Thread` (4-6× wins); `@Vector` inner math filed for v2 | libh3 has explicit SIMD paths on some grids |
 | Antimeridian / polar edge cases | partial (boundary tests in pure_polygon_test.zig) | full coverage; documented quirks per resolution |
@@ -180,7 +180,7 @@ integrator gets four independent layers of provenance verification.
 > this table claimed cosign-blob signing as live when it hadn't
 > been implemented. The Type-I over-claim was caught + retracted
 > on 2026-05-19, and the substrate (cosign keypair + signing helper
-> + sovereign signing-config) shipped on 2026-05-20. The claim is
+> + self-hosted signing config) shipped on 2026-05-20. The claim is
 > now backed by `ecosystem/onchain/cosign-attest.sh` producing
 > verifiable `.cosign-bundle` artifacts.
 
@@ -188,7 +188,7 @@ integrator gets four independent layers of provenance verification.
 
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
-| Active production consumers | stax workstation, 0 external known | Uber dispatch, Carto, Slack location, Foursquare, DoorDash, Lyft, every other ride-hail |
+| Active production consumers | the maintainer's own projects; no external user known | Uber dispatch, Carto, Slack location, Foursquare, DoorDash, Lyft, every other ride-hail |
 | Cells-per-day computed in prod | unknown | billions per day across Uber's dispatch alone |
 | Bug reports / month | 0 (no external user base) | tens to hundreds across the binding repos |
 | Incident response | n/a | yes, Uber SRE rotation owns h3 hot patches |
@@ -200,7 +200,7 @@ integrator gets four independent layers of provenance verification.
 
 | | zig-h3 | uber/h3 |
 | --- | --- | --- |
-| Maintainers | 1 (stax) + agent fleet | Uber's open-source org + community contributors |
+| Maintainers | 1, with AI-assisted development | Uber's open-source org + community contributors |
 | CODEOWNERS file | **yes** (`.github/CODEOWNERS`) | yes (per binding) |
 | CONTRIBUTING guide | yes | yes |
 | ISSUE_TEMPLATE | **yes** (bug + feature, GitHub-form schema) | yes |
@@ -290,7 +290,7 @@ substrate is ready when users adopt.
 
 **Multi-axis attack progress toward 10× Uber across the board** (per
 operator directive 2026-05-18):
-- ✅ Axis 6 (perf): 🔴 → 🟢. Parallel batch 3.6-6× faster than libh3.
+- ✅ Axis 6 (perf): 🔴 → 🟢. Pure Zig is slightly faster than libh3 single-threaded (5-8% on M2 Max, 12-29% on i7-1065G7).
 - ✅ Axis 5 (docs): 🔴 → 🟡. 8-file docs/ tree with tutorials, reference,
   bindings, internals.
 - 🟡 Axis 4 (bindings): 🔴 → toward 🟡. Real Python + Go bindings via
@@ -306,7 +306,7 @@ and build simplicity; we lose every category that matters for downstream
 adoption (test coverage, platform reach, language bindings, ecosystem,
 production scale, governance, stability).
 
-**The "2-yard-line" lens stax named**:
+**The "2-yard line" lens**:
 - Documentation drift was the *visible* gap (caught and closed with
   `tools/coverage-check.sh`).
 - The *invisible* gaps are above — categories 2 through 12. Each is its
@@ -334,7 +334,7 @@ Ordered by leverage:
    we want a downstream. Worth a week+; needs a clear use case to be
    non-parlor-trick.
 
-**What we explicitly should NOT do** (per stax's no-parlor-trick rule):
+**What we explicitly should NOT do** (no parlor tricks):
 - A Python binding that wraps the Zig wrapper of libh3. That's a binding
   to a wrapper to a wrapper. Use h3-py directly.
 - A JS binding for the same reason; use h3-js.
@@ -354,5 +354,5 @@ through. As of 2026-05-15, it does not.
 ---
 
 *Filed 2026-05-15 as experiment register exp-1778852770-778466161. This
-document is itself an `audited` verdict against my own engineering —
+document is itself a self-assessment of my own engineering —
 Type-1 catch on any prior implicit claim that zig-h3 was production-grade.*

@@ -75,7 +75,7 @@ Same shape for the inverse and grid disk:
 The serial `latLngToCell(point, res)` etc. continue to work
 unchanged. The batch versions are pure additions.
 
-### BEYOND-libh3 convenience functions
+### Composite functions beyond libh3
 
 ```zig
 // All new in v1.4 — saves a per-call round-trip
@@ -136,7 +136,7 @@ day one (the bug was Python-only).
 | `tools/coverage-check.sh` |           |      | ✓    | ✓    | ✓    |
 | Property test harness |               |      |      | ✓    | ✓    |
 | `*Batch[Parallel]` API|               |      |      |      | ✓    |
-| BEYOND-libh3 convenience |            |      |      |      | ✓    |
+| Composite functions      |            |      |      |      | ✓    |
 | `libzig_h3.so` C-ABI  |               |      |      |      | ✓    |
 
 ## Pre-v1.0 dependency pin
