@@ -22,7 +22,7 @@ jobs:
           - os: macos-14
             arch: aarch64
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install Zig 0.16.0
         uses: mlugg/setup-zig@v2
@@ -57,7 +57,7 @@ jobs:
           - aarch64-windows-gnu
           - wasm32-wasi
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install Zig 0.16.0
         uses: mlugg/setup-zig@v2
@@ -75,7 +75,7 @@ jobs:
       matrix:
         arch: [x86_64]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install Zig 0.16.0
         uses: mlugg/setup-zig@v2
         with:
@@ -89,7 +89,7 @@ jobs:
     name: python-binding (libzig_h3.so + ctypes + NumPy)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -114,7 +114,7 @@ jobs:
     name: go-binding (cgo + libzig_h3.so)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version: "1.22"
@@ -137,7 +137,7 @@ jobs:
     name: line-coverage (kcov)
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install Zig 0.16.0
         uses: mlugg/setup-zig@v2
