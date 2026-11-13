@@ -10,11 +10,10 @@
 const std = @import("std");
 const h3 = @import("h3");
 
+var g_io: std.Io = undefined;
+
 inline fn nanos() u64 {
-    var ts: std.os.linux.timespec = undefined;
-    _ = std.os.linux.clock_gettime(.MONOTONIC, &ts);
-    return @as(u64, @intCast(ts.sec)) * std.time.ns_per_s +
-        @as(u64, @intCast(ts.nsec));
+    return @intCast(std.Io.Clock.awake.now(g_io).nanoseconds);
 }
 
 const point_count: usize = 100_000;
@@ -25,7 +24,8 @@ const probes = [_]struct { label: []const u8, res: i32 }{
     .{ .label = "res11", .res = 11 },
 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    g_io = init.io;
     const a = std.heap.smp_allocator;
 
     const points = try a.alloc(h3.LatLng, point_count);
