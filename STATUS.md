@@ -1,6 +1,11 @@
 # zig-h3 status
 
-Last touched: 2026-05-15
+| | |
+|---|---|
+| Proof level | **benchmarked** (see [proof levels](https://github.com/SMC17/SMC17/blob/main/STANDARDS.md#proof-levels)) |
+| Last verified | 2026-11-12, fresh clone, macOS on Apple M2 Max, Zig 0.16.0 |
+| Command | `zig build test --summary all`; `zig build bench -Doptimize=ReleaseFast` |
+| Result | 211/211 tests pass; benchmark numbers in [BENCH.md](BENCH.md) |
 
 ## Honest version posture
 
@@ -13,11 +18,11 @@ spirit** for two independent reasons:
    vanity claim — the language guarantees aren't there yet.
 2. **No production deployment exists.** This library has zero
    real-traffic operation, zero soak time, zero production-incident
-   history. "Production-grade hygiene milestone" describes shipping
+   history. The v1.0.0 "project policies" milestone describes shipping
    process (LICENSE / SECURITY / CONTRIBUTING / CI / CODE_OF_CONDUCT)
    — necessary but **not sufficient** for "production-grade."
 
-The hygiene work is real. The v1.x tags will be honored for changelog
+The policy work is real. The v1.x tags will be honored for changelog
 continuity. But every reader should treat this as a pre-1.0 substrate
 until both gates above close.
 
@@ -28,16 +33,16 @@ load-bearing routes through Uber's C implementation. `BAKEOFF.md`
 audits the 11 categories where uber/h3 leads decisively. Read it
 before treating zig-h3 as a libh3 replacement.
 
-## Proof-vocabulary index (per `~/AGENT_HARNESS.md`)
+## Proof levels by component
 
 | component                       | proof level                  | evidence                                                                                                                                                          |
 |---------------------------------|------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Wrapper surface (`latLngToCell` / `cellToLatLng` / hierarchy / grid / polygon, 70/70 H3 v4 functions) | `unit-tested` + `audited` against libh3 | `zig build test` 180/180 pass; `tools/coverage-check.sh` asserts every `H3_EXPORT(...)` in `h3api.h` resolves to a wrapper or `raw` re-export                     |
-| Property-invariant harness (`src/property_invariants.zig`) | `audited` (self-consistent) | `MIN_TOTAL_TRIALS = 10_000`; actual run reports `[property_invariants] total trials: 10392` (8000 geo across 16 res + 200 pentagon walks + 2000 synth + drift)     |
-| Polygon round-trip property (`src/property_polygon_test.zig`) | `audited` (self-consistent) | `PROP_A_TRIALS = 2_000`; run reports `passed: 1999, pentagon skips: 0, antimeridian skips: 1, superset misses: 0`; Property B sweeps 610 (122×5) base-cell trials |
-| Mutation harness (`tools/mutation-test.sh`) | `audited` (one HW class, one Zig version) | 16 mutation operators defined (`M01`..`M16`); 16/16 killed after M07/M08 `isValidCell` regressions (commit `88afd31`) and M15 `pointInsideGeoLoop` half-open boundary closure (commit `d729cd2`) |
+| Wrapper surface (`latLngToCell` / `cellToLatLng` / hierarchy / grid / polygon, 70/70 H3 v4 functions) | `unit-tested`, cross-checked against libh3 | `zig build test` 211/211 pass; `tools/coverage-check.sh` asserts every `H3_EXPORT(...)` in `h3api.h` resolves to a wrapper or `raw` re-export                     |
+| Property-invariant harness (`src/property_invariants.zig`) | `unit-tested` (property) | `MIN_TOTAL_TRIALS = 10_000`; actual run reports `[property_invariants] total trials: 10392` (8000 geo across 16 res + 200 pentagon walks + 2000 synth + drift)     |
+| Polygon round-trip property (`src/property_polygon_test.zig`) | `unit-tested` (property) | `PROP_A_TRIALS = 2_000`; run reports `passed: 1999, pentagon skips: 0, antimeridian skips: 1, superset misses: 0`; Property B sweeps 610 (122×5) base-cell trials |
+| Mutation harness (`tools/mutation-test.sh`) | `unit-tested` (mutation; one machine, one Zig version) | 16 mutation operators defined (`M01`..`M16`); 16/16 killed after M07/M08 `isValidCell` regressions (commit `88afd31`) and M15 `pointInsideGeoLoop` half-open boundary closure (commit `d729cd2`) |
 | `cellAreaKm2` numeric tolerance | `unit-tested` (sampled)      | `src/pure_boundary.zig` tolerance schedule: hex rads² / km² compared at `1e-8` relative (15 trials × 7 even-step resolutions); pentagons at `1e-6` relative (12 pentagons at res 5) — the looser pentagon bound is itself the finding, not a hidden assumption |
-| Fuzz path (`src/pure.zig`)      | `audited` (self-consistent)  | `fuzz_iters: usize = 10_000` random-u64 inputs through the pure parser; zero panics; explicit NaN/Inf rejection                                                   |
+| Fuzz path (`src/pure.zig`)      | `unit-tested` (property)  | `fuzz_iters: usize = 10_000` random-u64 inputs through the pure parser; zero panics; explicit NaN/Inf rejection                                                   |
 | Cross-architecture build        | `compiled` (CI only)         | CI matrix in `.github/workflows/` covers Linux x86_64 + Linux aarch64 + macOS arm64; no behavior assertions on the non-primary targets                            |
 | README ↔ code drift             | `unit-tested` (partial)      | `tools/coverage-check.sh` covers the H3 public-function enumeration; the README's `180 tests` line is currently drifted on the `feat/wrap-final-6-h3-functions` worktree (172 there) — fixed forward via the existing doc-lag pattern, not by this audit |
 
