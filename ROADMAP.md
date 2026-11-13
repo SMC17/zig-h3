@@ -4,12 +4,6 @@ Part of the **Proofs and tools** system in [SMC17](https://github.com/SMC17). Cu
 
 The issues are the source of truth; this file is a snapshot of them taken 2026-11-12. Anything not listed here is not promised.
 
-## Now
-
-Priority P0 and P1: committed for the [Next milestone](https://github.com/SMC17/zig-h3/milestone/1).
-
-- [#12](https://github.com/SMC17/zig-h3/issues/12) Reconcile the BAKEOFF score with the README
-
 ## Unsorted
 
 Open, not yet prioritised.
