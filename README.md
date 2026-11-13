@@ -1,5 +1,7 @@
 # zig-h3
 
+**[Status](STATUS.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Issues](https://github.com/SMC17/zig-h3/issues) · [All SMC17 work](https://github.com/users/SMC17/projects/16)**
+
 > H3 hexagonal grid bindings for Zig 0.16. 211/211 tests including 10,392 property trials across 16 resolutions + 443 pentagons. Cross-validated against libh3 v4.1.0.
 
 [![CI](https://github.com/SMC17/zig-h3/actions/workflows/ci.yml/badge.svg)](https://github.com/SMC17/zig-h3/actions)
