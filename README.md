@@ -2,13 +2,11 @@
 
 **[Status](STATUS.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Issues](https://github.com/SMC17/zig-h3/issues) · [All SMC17 work](https://github.com/users/SMC17/projects/16)**
 
-> H3 hexagonal grid bindings for Zig 0.16. 211/211 tests including 10,392 property trials across 16 resolutions + 443 pentagons. Cross-validated against libh3 v4.1.0.
+> Uber's H3 hexagonal grid for Zig 0.16: all 70 H3 v4 functions, a pure-Zig path cross-checked against libh3 v4.1.0, and bindings for Python, Go, Rust and Node.
 
 [![CI](https://github.com/SMC17/zig-h3/actions/workflows/ci.yml/badge.svg)](https://github.com/SMC17/zig-h3/actions)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL_3.0-blue.svg)](LICENSE)
 [![Zig: 0.16](https://img.shields.io/badge/Zig-0.16-orange.svg)](https://ziglang.org/)
-[![Tests: 211/211](https://img.shields.io/badge/tests-211%2F211-success.svg)](#tests)
-[![Property trials: 10,392](https://img.shields.io/badge/property%20trials-10%2C392-blue.svg)](#tests)
 
 > **Docs**: [tutorials](docs/tutorials/) · [reference](docs/reference/) ·
 > [bindings](docs/bindings/) · [internals](docs/internals/). Or jump to
@@ -56,7 +54,7 @@ measured by `tools/coverage.sh` (kcov against a dedicated
   The parallel variants split a batch across threads; 8 threads give
   about 6-7x the throughput of single-threaded libh3 on an M2 Max
   (that compares 8 threads with 1; see [BENCH.md](BENCH.md)).
-- **5 BEYOND-libh3 functions**: `cellCentroidDistanceKm`,
+- **5 composite functions beyond the libh3 API**: `cellCentroidDistanceKm`,
   `cellToParentN`, `cellsKNearest`, `cellsInBbox`,
   `cellCentroidDistanceKmBatch` — composing libh3 primitives into
   one ergonomic call.
@@ -68,11 +66,10 @@ measured by `tools/coverage.sh` (kcov against a dedicated
 - **Downstream consumer demo**: [`examples/zig-h3-csv/`](examples/zig-h3-csv/)
   — a runnable CLI that reads CSV of lat/lng and emits H3 cells.
 
-[BAKEOFF.md](BAKEOFF.md) tracks the honest score vs uber/h3:
-**5 we lead 🟢 / 5 parity 🟡 / 3 Uber leads 🔴**
-(was 2/2/9 before the 2026-05-18 push). The 3 remaining 🔴 axes
-(production scale, ecosystem depth, governance) require distribution
-work to close, not engineering.
+[BAKEOFF.md](BAKEOFF.md) compares zig-h3 with uber/h3 on 13 axes: ahead on
+10, at parity on 2, behind on 1. The one it cannot close with code is
+production deployment scale: uber/h3 runs at Uber, Carto, DoorDash and
+more; zig-h3 has no known production user.
 
 - Lat/lng ↔ cell conversions
 - Cell boundary geometry
@@ -442,7 +439,7 @@ Three benchmarks ship under `bench/`:
 - `bench_pure_vs_libh3.zig` — `latLngToCell` / `cellToLatLng` /
   `gridDisk` through both the libh3 wrapper (`h3.*`) and the pure-Zig
   path (`h3.h3index.*` / `h3.h3decode.*` / `h3.grid.*`), side-by-side.
-  This is the killer chart for the v0.1.0 pure-Zig port.
+  This is the main comparison for the v0.1.0 pure-Zig port.
 
 Each benchmark warms up, then measures with enough iterations to dampen
 variance over roughly one second of wall time per row. Output is
@@ -478,7 +475,7 @@ i7-1065G7 @ 1.30 GHz, Linux 7.0.3-arch1-1 x86_64, Zig 0.16.0,
 | 11         | 3 | 37        | 10 074  |   3.7 M   |
 | 11         | 5 | 91        | 23 854  |   3.8 M   |
 
-### Pure-Zig vs libh3 (the killer chart)
+### Pure Zig vs libh3
 
 | Op             | Res | libh3 ns/op | pure-Zig ns/op | pure/libh3 |
 | -------------- | --- | ----------- | -------------- | ---------- |
@@ -514,9 +511,10 @@ quiet machine for steady measurements.
 Public now:
 
 - [**logic-zig**](https://github.com/SMC17/logic-zig): an executable museum of logic and a fail-closed trust kernel
-- [**method-wagwan**](https://github.com/SMC17/method-wagwan): walk-forward replay engine for code; zig-h3 is its first replay target
+- [**method-wagwan**](https://github.com/SMC17/method-wagwan): walk-forward replay engine for code; zig-h3 is its smoke-test target
 - [**zag**](https://github.com/SMC17/zag): terminal, block model, and agent runtime in one Zig program
 
-Publishing one at a time after a clean clone passes: `zig-graph`, `zkdb`,
-`tokenizers-zig`, `safetensors-zig`, `faiss-zig`. See
-[github.com/SMC17](https://github.com/SMC17).
+- [**zkdb**](https://github.com/SMC17/zkdb): columnar time-series database with q/kdb+ semantics
+- [**tokenizers-zig**](https://github.com/SMC17/tokenizers-zig), [**safetensors-zig**](https://github.com/SMC17/safetensors-zig), [**faiss-zig**](https://github.com/SMC17/faiss-zig): HuggingFace formats and vector search in Zig
+
+Everything else: [github.com/SMC17](https://github.com/SMC17).
