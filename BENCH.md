@@ -8,12 +8,34 @@ comparison is fair: same allocator, same RNG seed, same point stream.
 The reproduction recipe at the bottom is intentional — the BAKEOFF
 discipline says benchmarks must be runnable by the reader.
 
-## TL;DR — pure-Zig is 1.4-2× faster scalar; parallel batch is 3.6-6× faster
+## TL;DR
+
+Single-threaded, pure Zig is slightly faster than libh3: 5-8% on an Apple M2
+Max, 12-29% on an i7-1065G7. The parallel batch API spreads work across
+threads, so its numbers below compare N threads against one libh3 thread.
+They show scaling, not a faster algorithm.
+
+### Apple M2 Max, macOS, Zig 0.16.0, ReleaseFast (2026-11-12, commit 422ac89)
+
+| Operation | Res | libh3 ns/op | pure Zig ns/op | pure / libh3 |
+|---|---:|---:|---:|---:|
+| latLngToCell | 7 | 460 | 427 | 0.93 |
+| latLngToCell | 9 | 526 | 496 | 0.94 |
+| latLngToCell | 11 | 597 | 557 | 0.93 |
+| cellToLatLng | 7 | 249 | 230 | 0.92 |
+| cellToLatLng | 9 | 276 | 254 | 0.92 |
+| cellToLatLng | 11 | 298 | 280 | 0.94 |
+| gridDisk k=3 | 9 | 546 | 505 | 0.92 |
+
+8-thread batch `latLngToCell` (res 9): 86 ns/op against 533 ns/op for
+single-threaded libh3, about 6.2x the throughput from 8 threads.
+
+### Intel i7-1065G7 (original measurements, Linux)
 
 On a 5-year-old laptop (Intel i7-1065G7 @ 1.3 GHz, ReleaseFast,
 no PGO, 4C/8T), the pure-Zig path beats libh3 by 20-40% on scalar
-calls, and the 8-thread parallel batch path beats libh3 by
-**3.6-6× across all three primitive ops** (latLngToCell,
+calls, and the 8-thread parallel batch path delivers
+**3.6-6× the throughput of one libh3 thread** across (latLngToCell,
 cellToLatLng, gridDisk).
 
 | Operation                   | Resolution | libh3 ns/op | zig-par-8t ns/op | zig vs libh3 |
@@ -56,8 +78,8 @@ const ok = try h3.gridDiskBatch(allocator, origins, k, stride, disks_out);
 const ok = try h3.gridDiskBatchParallel(allocator, origins, k, stride, disks_out, 8);
 ```
 
-**Measured: 8-thread parallel batch is 3.6-6× faster than libh3 scalar
-on a 4C/8T laptop.** See the table at the top.
+**Measured: 8 threads give 3.6-6x the throughput of one libh3 thread on a
+4C/8T laptop, about 6-7x on a 12-core M2 Max.** See the tables at the top.
 
 Next-frontier moves to push past 10× (filed as future work, not v1.x
 blockers):

@@ -5,16 +5,15 @@
 //! cells, so cells/sec is the load-bearing throughput metric (e.g. for
 //! polygon-rasterisation workloads).
 //!
-//! Timing: `std.os.linux.clock_gettime(.MONOTONIC, &ts)` directly.
+//! Timing: `std.Io.Clock.awake` (portable across Linux and macOS).
 
 const std = @import("std");
 const h3 = @import("h3");
 
+var g_io: std.Io = undefined;
+
 inline fn nanos() u64 {
-    var ts: std.os.linux.timespec = undefined;
-    _ = std.os.linux.clock_gettime(.MONOTONIC, &ts);
-    return @as(u64, @intCast(ts.sec)) * std.time.ns_per_s +
-        @as(u64, @intCast(ts.nsec));
+    return @intCast(std.Io.Clock.awake.now(g_io).nanoseconds);
 }
 
 const origin_count: usize = 1_000;
@@ -24,7 +23,8 @@ const warmup_iters: usize = 1_000;
 const resolutions = [_]i32{ 7, 9, 11 };
 const ks = [_]i32{ 1, 3, 5 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    g_io = init.io;
     const allocator = std.heap.smp_allocator;
 
     // Pre-resolve a deterministic set of origin cells at each resolution.
