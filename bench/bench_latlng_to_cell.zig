@@ -5,7 +5,7 @@
 //! ops per second. Resolution affects the inverse-projection cost via the
 //! aperture-7 step count; this benchmark surfaces that scaling.
 //!
-//! Timing: `std.os.linux.clock_gettime(.MONOTONIC, &ts)` directly — Zig 0.16
+//! Timing: `std.Io.Clock.awake` (portable across Linux and macOS) — Zig 0.16
 //! removed `std.time.Timer` and `std.time.nanoTimestamp`.
 //!
 //! Output is parseable `key=value` whitespace-separated.
@@ -13,11 +13,10 @@
 const std = @import("std");
 const h3 = @import("h3");
 
+var g_io: std.Io = undefined;
+
 inline fn nanos() u64 {
-    var ts: std.os.linux.timespec = undefined;
-    _ = std.os.linux.clock_gettime(.MONOTONIC, &ts);
-    return @as(u64, @intCast(ts.sec)) * std.time.ns_per_s +
-        @as(u64, @intCast(ts.nsec));
+    return @intCast(std.Io.Clock.awake.now(g_io).nanoseconds);
 }
 
 const point_count: usize = 1_000_000;
@@ -25,7 +24,8 @@ const warmup_iters: usize = 10_000;
 
 const resolutions = [_]i32{ 7, 9, 11, 13, 15 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    g_io = init.io;
     const allocator = std.heap.smp_allocator;
 
     // Pre-generate the random lat/lng stream once and reuse it across all
