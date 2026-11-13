@@ -10,16 +10,15 @@
 //! are honest; they're the only way to know whether the port is competitive
 //! with the C reference (and where it isn't yet, what to optimise).
 //!
-//! Timing: `std.os.linux.clock_gettime(.MONOTONIC, &ts)` directly.
+//! Timing: `std.Io.Clock.awake` (portable across Linux and macOS).
 
 const std = @import("std");
 const h3 = @import("h3");
 
+var g_io: std.Io = undefined;
+
 inline fn nanos() u64 {
-    var ts: std.os.linux.timespec = undefined;
-    _ = std.os.linux.clock_gettime(.MONOTONIC, &ts);
-    return @as(u64, @intCast(ts.sec)) * std.time.ns_per_s +
-        @as(u64, @intCast(ts.nsec));
+    return @intCast(std.Io.Clock.awake.now(g_io).nanoseconds);
 }
 
 const point_count: usize = 200_000;
@@ -36,7 +35,8 @@ const probes = [_]Probe{
     .{ .label = "res11", .res = 11 },
 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    g_io = init.io;
     const allocator = std.heap.smp_allocator;
 
     const points = try allocator.alloc(h3.LatLng, point_count);

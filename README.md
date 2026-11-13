@@ -51,8 +51,9 @@ measured by `tools/coverage.sh` (kcov against a dedicated
 **New in v1.4.x**:
 - **Batch + parallel API** (6 new functions: `latLngToCellBatch`,
   `cellToLatLngBatch`, `gridDiskBatch` and `*Parallel` variants).
-  8-thread parallel batch is **3.6-6× faster than libh3 scalar**
-  (see [BENCH.md](BENCH.md)).
+  The parallel variants split a batch across threads; 8 threads give
+  about 6-7x the throughput of single-threaded libh3 on an M2 Max
+  (that compares 8 threads with 1; see [BENCH.md](BENCH.md)).
 - **5 BEYOND-libh3 functions**: `cellCentroidDistanceKm`,
   `cellToParentN`, `cellsKNearest`, `cellsInBbox`,
   `cellCentroidDistanceKmBatch` — composing libh3 primitives into
@@ -61,8 +62,7 @@ measured by `tools/coverage.sh` (kcov against a dedicated
   ([Python](bindings/python/), [Go](bindings/go/zigh3/),
   [Rust](bindings/rust/zigh3/), [Node](bindings/node/zigh3/)).
   48 cross-language tests pass.
-- **27 000+ executed cross-validation cases per `zig build test`**
-  (15× Uber's published unit-test count).
+- **27 000+ executed cross-validation cases per `zig build test`**.
 - **Downstream consumer demo**: [`examples/zig-h3-csv/`](examples/zig-h3-csv/)
   — a runnable CLI that reads CSV of lat/lng and emits H3 cells.
 
@@ -421,9 +421,10 @@ zig build test
 
 ## Benchmarks
 
-**Headline result**: the pure-Zig port is **0.71–0.88× of libh3** (12–29%
-faster) on every measured geo-conversion and `gridDisk(k=3)` call on
-i7-1065G7. Full numbers + reproduction recipe + caveats in
+**Headline result**: single-threaded, the pure-Zig port runs at 0.92-0.95x
+of libh3's time (5-8% faster) on every measured call on an Apple M2 Max
+(2026-11-12), and 0.71-0.88x on an older i7-1065G7. Numbers vary by CPU;
+run `zig build bench` on yours. Full numbers + reproduction recipe + caveats in
 **[BENCH.md](BENCH.md)**.
 
 ```sh
