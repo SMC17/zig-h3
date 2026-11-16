@@ -518,3 +518,7 @@ Public now:
 - [**tokenizers-zig**](https://github.com/SMC17/tokenizers-zig), [**safetensors-zig**](https://github.com/SMC17/safetensors-zig), [**faiss-zig**](https://github.com/SMC17/faiss-zig): HuggingFace formats and vector search in Zig
 
 Everything else: [github.com/SMC17](https://github.com/SMC17).
+
+## Unified C ABI, Python Wheel & WASM
+
+Core primitives from this repository are also cross-pollinated into **[SMC17/zinging (`zig-substrate`)](https://github.com/SMC17/zinging)** with C11 ABI bindings (`199` symbols), standalone Python wheels, JSON-RPC daemon (`substrate serve`), and `wasm32` builds.
