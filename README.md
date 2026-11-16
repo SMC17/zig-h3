@@ -2,7 +2,7 @@
 
 **[Status](STATUS.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Issues](https://github.com/SMC17/zig-h3/issues) · [All SMC17 work](https://github.com/users/SMC17/projects/16)**
 
-> Uber's H3 hexagonal grid for Zig 0.16: all 70 H3 v4 functions, a pure-Zig path cross-checked against libh3 v4.1.0, and bindings for Python, Go, Rust and Node.
+> Uber's H3 hexagonal grid for Zig 0.16: all 70 H3 v4 functions, a pure-Zig path cross-checked against libh3 v4.1.0, and bindings for Python, Rust, Node, and WebAssembly.
 
 [![CI](https://github.com/SMC17/zig-h3/actions/workflows/ci.yml/badge.svg)](https://github.com/SMC17/zig-h3/actions)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL_3.0-blue.svg)](LICENSE)
@@ -58,9 +58,9 @@ measured by `tools/coverage.sh` (kcov against a dedicated
   `cellToParentN`, `cellsKNearest`, `cellsInBbox`,
   `cellCentroidDistanceKmBatch` — composing libh3 primitives into
   one ergonomic call.
-- **4 real language bindings** via the `libzig_h3.so` C-ABI shim
-  ([Python](bindings/python/), [Go](bindings/go/zigh3/),
-  [Rust](bindings/rust/zigh3/), [Node](bindings/node/zigh3/)).
+- **4 language bindings** via the `libzig_h3.so` C-ABI shim and WebAssembly
+  ([Python](bindings/python/), [Rust](bindings/rust/zigh3/),
+  [Node](bindings/node/zigh3/), [WASM](bindings/wasm/)).
   48 cross-language tests pass.
 - **27 000+ executed cross-validation cases per `zig build test`**.
 - **Downstream consumer demo**: [`examples/zig-h3-csv/`](examples/zig-h3-csv/)
