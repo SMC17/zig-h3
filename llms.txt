@@ -1,0 +1,15 @@
+# zig-h3 (`SMC17/zig-h3`)
+
+> Uber H3 v4 for Zig 0.16: all 70 public functions, 211 tests cross-validated against libh3 v4.1.0, pure-Zig and C-wrapper paths.
+
+## Repository & Docs
+- **Repository**: https://github.com/SMC17/zig-h3
+- [README](https://github.com/SMC17/zig-h3/blob/main/README.md)
+- [Build & Manifest](https://github.com/SMC17/zig-h3/blob/main/build.zig)
+- [Benchmarks](https://github.com/SMC17/zig-h3/blob/main/BENCH.md)
+- [API Stability](https://github.com/SMC17/zig-h3/blob/main/API_STABILITY.md)
+- [Source](https://github.com/SMC17/zig-h3/tree/main/src) & [Tests](https://github.com/SMC17/zig-h3/tree/main/tests)
+
+## Ecosystem & Author
+- **Unified Substrate (`SMC17/zinging`)**: https://github.com/SMC17/zinging
+- **Author / Org**: https://github.com/SMC17
